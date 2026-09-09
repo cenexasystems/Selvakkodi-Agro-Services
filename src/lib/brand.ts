@@ -1,0 +1,22 @@
+export const BRAND_EN = "Selvakkodi Agro Service"
+export const BRAND_TA = "செல்வக்கொடி அக்ரோ சர்வீஸ்"
+export const BRAND_OWNER = "S. Rajesh Kumar"
+export const BRAND_SUBTITLE = "Agricultural Inputs, Seeds, Fertilizers & Crop Care"
+export const BRAND_LOGO = '/logo.png'
+
+export const BRAND_PRIMARY_PHONE_DISPLAY = '9080788263'
+export const BRAND_PRIMARY_PHONE_E164 = '919080788263'
+export const BRAND_SECONDARY_PHONE_DISPLAY = '9677791900'
+export const BRAND_SECONDARY_PHONE_E164 = '919677791900'
+export const BRAND_PHONE_DISPLAY = '9080788263 / 9677791900'
+export const BRAND_THIRD_PHONE_DISPLAY = BRAND_SECONDARY_PHONE_DISPLAY
+export const BRAND_THIRD_PHONE_E164 = BRAND_SECONDARY_PHONE_E164
+export const BRAND_PHONE_E164 = BRAND_PRIMARY_PHONE_E164
+export const BRAND_WHATSAPP = BRAND_PRIMARY_PHONE_DISPLAY
+export const WHATSAPP_NUM = BRAND_PRIMARY_PHONE_E164
+export const BRAND_WHATSAPP_LINK = `https://wa.me/${BRAND_PRIMARY_PHONE_E164}`
+export const BRAND_EMAIL = 'selvakkodiagroservice@gmail.com'
+export const BRAND_ADDRESS = 'No.499/A, Thanipadi Main Road, Thandarampattu, Tiruvannamalai District, Tamil Nadu – 606707'
+export const BRAND_INSTAGRAM = 'selvakkodi_agro_service'
+export const BRAND_INSTAGRAM_URL = 'https://instagram.com/selvakkodi_agro_service'
+export const BRAND_LOCATION_LINK = '#'
