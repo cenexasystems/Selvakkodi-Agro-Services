@@ -74,6 +74,20 @@ export const useLangStore = create<LangState>()(
       setLang: (lang) => set({ lang }),
       t: (key) => getTranslation(dict[get().lang], key) || getTranslation(dict.en, key) || humanizeKey(key),
     }),
-    { name: 'purple-boutique-lang' },
+    {
+      name: 'selvakkodi-lang',
+      storage: {
+        getItem: (name) => {
+          const str = localStorage.getItem(name) || localStorage.getItem('purple-boutique-lang')
+          if (!str) return null
+          try { return JSON.parse(str) } catch { return null }
+        },
+        setItem: (name, val) => localStorage.setItem(name, JSON.stringify(val)),
+        removeItem: (name) => {
+          localStorage.removeItem(name)
+          localStorage.removeItem('purple-boutique-lang')
+        }
+      }
+    },
   ),
 )

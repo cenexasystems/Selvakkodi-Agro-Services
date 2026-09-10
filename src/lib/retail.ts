@@ -56,15 +56,16 @@ const INR_CURRENCY = new Intl.NumberFormat('en-IN', {
 
 const clampTo = (value: number, min = 0) => (value < min ? min : value)
 
-export const roundTo = (value: number, places = 2) => {
-  const factor = 10 ** places
-  return Math.round((value + Number.EPSILON) * factor) / factor
-}
-
 export const toNumber = (value: unknown, fallback = 0) => {
   if (value === null || value === undefined) return fallback
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : fallback
+}
+
+export const roundTo = (value: unknown, places = 2) => {
+  const num = toNumber(value, 0)
+  const factor = 10 ** places
+  return Math.round((num + Number.EPSILON) * factor) / factor
 }
 
 export const safeId = (id: unknown): number | null => {
@@ -334,7 +335,10 @@ export const calculateLineTotal = (
 export const variantLineTotal = (price: number, cartQty: number): number =>
   roundTo(price * Math.max(0, Math.round(cartQty)), 2)
 
-export const formatCurrency = (value: number) => INR_CURRENCY.format(roundTo(value, 2)).replace(/\u00a0/g, ' ')
+export const formatCurrency = (value: unknown) => {
+  const num = toNumber(value, 0)
+  return INR_CURRENCY.format(roundTo(num, 2)).replace(/\u00a0/g, ' ')
+}
 
 export const formatCompactQuantity = (quantity: number, unitLabel: string) => {
   const q = formatNumber(quantity)

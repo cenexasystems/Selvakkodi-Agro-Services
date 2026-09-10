@@ -34,11 +34,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const user = users[0];
 
-    if (!user.password_hash) {
+    let isMatch = false;
+
+    // Check environment variable overrides for Admin and Staff
+    const isAdminOverride = process.env.ADMIN_ID && email === process.env.ADMIN_ID.trim().toLowerCase() && password === process.env.ADMIN_PASSWORD;
+    const isStaffOverride = process.env.STAFF_ID && email === process.env.STAFF_ID.trim().toLowerCase() && password === process.env.STAFF_PASSWORD;
+
+    if (isAdminOverride || isStaffOverride) {
+      isMatch = true;
+    } else if (user.password_hash) {
+      isMatch = await comparePassword(password, user.password_hash);
+    } else {
       return errorResponse(res, 'Account has no password set. Please reset your password.', 401);
     }
 
-    const isMatch = await comparePassword(password, user.password_hash);
     if (!isMatch) {
       return errorResponse(res, 'Invalid email or password.', 401);
     }

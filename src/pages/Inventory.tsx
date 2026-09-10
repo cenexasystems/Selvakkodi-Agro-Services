@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { Package, Search, AlertTriangle, X, RefreshCw, Edit2, Plus, Trash2, ChevronDown, Download, TrendingUp, PieChart, Sliders, History, Minus } from 'lucide-react'
 import { formatCurrency } from '../lib/retail'
 import { useSound } from '../context/SoundContext'
-import { useSettingsStore, useAdminAuthStore } from '../store/store'
+import { useSettingsStore, useAdminAuthStore, useVariantStore } from '../store/store'
 import { settingsService } from '../services/settingsService'
 import { categoryService } from '../services/categoryService'
 import { fetchAllProducts, createProduct, updateProduct, deleteProduct, fetchInventoryLogs, createInventoryLog } from '../services/productService'
@@ -20,6 +20,10 @@ interface InventoryProduct {
   is_active: boolean
   updated_at: string
   image_url?: string
+  has_variants?: boolean
+  rate?: number
+  selling_price?: number
+  unit_price?: number
 }
 
 interface Category {
@@ -82,7 +86,7 @@ interface InventoryLog {
 
 type DatePreset = 'all' | 'today' | 'week' | 'month' | 'custom'
 
-function InventoryAnalytics({ products, downloadCSV }: { products: InventoryProduct[]; downloadCSV: () => void }) {
+function InventoryAnalytics({ products, downloadCSV, getProductPrice }: { products: InventoryProduct[]; downloadCSV: () => void; getProductPrice?: (p: InventoryProduct) => number }) {
   const [datePreset, setDatePreset] = useState<DatePreset>('week')
   const [fromDate, setFromDate] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().split('T')[0]
@@ -195,21 +199,28 @@ function InventoryAnalytics({ products, downloadCSV }: { products: InventoryProd
             <TrendingUp size={16} className="text-emerald-500" /> Highest Stock Value (Current)
           </h4>
           <div className="space-y-3">
-            {products.filter(p => p.stock_quantity > 0)
-              .sort((a, b) => (b.stock_quantity * b.price) - (a.stock_quantity * a.price))
-              .slice(0, 5).map((p, i) => (
-                <div key={p.id} className="flex justify-between items-center p-3 rounded-xl bg-slate-50 border border-slate-100">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-white font-black text-xs text-slate-400 shadow-sm">{i + 1}</span>
-                    <div className="min-w-0">
-                      <p className="font-bold text-sm text-slate-800 truncate">{p.name}</p>
-                      <p className="text-[10px] text-slate-500 truncate">{p.stock_quantity} units • {formatCurrency(p.price)}/unit</p>
+            {products.filter(p => Number(p.stock_quantity) > 0)
+              .sort((a, b) => {
+                const priceA = getProductPrice ? getProductPrice(a) : (Number(a.price) || 0)
+                const priceB = getProductPrice ? getProductPrice(b) : (Number(b.price) || 0)
+                return (Number(b.stock_quantity) * priceB) - (Number(a.stock_quantity) * priceA)
+              })
+              .slice(0, 5).map((p, i) => {
+                const itemPrice = getProductPrice ? getProductPrice(p) : (Number(p.price) || 0)
+                return (
+                  <div key={p.id} className="flex justify-between items-center p-3 rounded-xl bg-slate-50 border border-slate-100">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-white font-black text-xs text-slate-400 shadow-sm">{i + 1}</span>
+                      <div className="min-w-0">
+                        <p className="font-bold text-sm text-slate-800 truncate">{p.name}</p>
+                        <p className="text-[10px] text-slate-500 truncate">{p.stock_quantity} units • {formatCurrency(itemPrice)}/unit</p>
+                      </div>
                     </div>
+                    <p className="font-black text-emerald-600 shrink-0 ml-2">{formatCurrency(Number(p.stock_quantity) * itemPrice)}</p>
                   </div>
-                  <p className="font-black text-emerald-600 shrink-0 ml-2">{formatCurrency(p.stock_quantity * p.price)}</p>
-                </div>
-            ))}
-            {products.filter(p => p.stock_quantity > 0).length === 0 && <p className="text-sm text-slate-400 text-center py-4">No data.</p>}
+                )
+              })}
+            {products.filter(p => Number(p.stock_quantity) > 0).length === 0 && <p className="text-sm text-slate-400 text-center py-4">No data.</p>}
           </div>
         </div>
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-[#A5D6A7]/60">
@@ -253,7 +264,7 @@ function InventoryAnalytics({ products, downloadCSV }: { products: InventoryProd
               <tbody className="divide-y divide-[#F0EEE9]">
                 {logs.map(log => (
                   <tr key={log.id} className="hover:bg-orange-50/30">
-                    <td className="px-4 py-3 text-[11px] text-[#6B7280] whitespace-nowrap">{new Date(log.created_at).toLocaleDateString('en-MY')}<br/><span className="text-[10px] opacity-70">{new Date(log.created_at).toLocaleTimeString('en-MY',{hour:'2-digit',minute:'2-digit'})}</span></td>
+                    <td className="px-4 py-3 text-[11px] text-[#6B7280] whitespace-nowrap">{new Date(log.created_at).toLocaleDateString('en-IN')}<br/><span className="text-[10px] opacity-70">{new Date(log.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</span></td>
                     <td className="px-4 py-3 font-bold text-[#111111] max-w-[140px] truncate">{(log.products as any)?.name || '—'}</td>
                     <td className="px-4 py-3 text-[#6B7280] text-xs">{(log.products as any)?.category || '—'}</td>
                     <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase ${REASON_COLORS[log.reason] || 'bg-gray-100 text-gray-600'}`}>{log.reason.replace('_',' ')}</span></td>
@@ -274,6 +285,7 @@ function InventoryAnalytics({ products, downloadCSV }: { products: InventoryProd
 export default function Inventory() {
   const { play } = useSound()
   const { settings, fetchSettings: loadSettings } = useSettingsStore()
+  const { variantsMap, getDefaultVariant, fetchVariants } = useVariantStore()
   const role = useAdminAuthStore(state => state.role)
   const isAdmin = role === 'admin'
   const globalLimit = settings?.lowStockLimit ?? 5
@@ -340,6 +352,22 @@ export default function Inventory() {
     }
   }
 
+  const getProductPrice = useCallback((p: InventoryProduct): number => {
+    if (p.has_variants) {
+      const defaultVar = getDefaultVariant(String(p.id))
+      if (defaultVar && Number.isFinite(defaultVar.price) && defaultVar.price > 0) {
+        return defaultVar.price
+      }
+      const pVariants = variantsMap[String(p.id)]
+      if (pVariants && pVariants.length > 0 && Number.isFinite(pVariants[0].price) && pVariants[0].price > 0) {
+        return pVariants[0].price
+      }
+    }
+    const raw = p.price ?? (p as any).rate ?? (p as any).selling_price ?? (p as any).unit_price
+    const parsed = Number(raw)
+    return Number.isFinite(parsed) ? parsed : 0
+  }, [getDefaultVariant, variantsMap])
+
   const downloadCSV = () => {
     const headers = ['ID', 'Product Name', 'Category', 'Stock Quantity', 'Low Stock Alert', 'Price (₹)', 'Purchase Price (₹)', 'Status', 'Last Updated']
     const rows = products.map(p => {
@@ -348,10 +376,10 @@ export default function Inventory() {
         p.id,
         `"${p.name.replace(/"/g, '""')}"`,
         `"${(p.category || '').replace(/"/g, '""')}"`,
-        p.stock_quantity,
-        p.low_stock_alert,
-        p.price,
-        p.purchase_price || 0,
+        Number(p.stock_quantity) || 0,
+        Number(p.low_stock_alert) || 5,
+        getProductPrice(p),
+        Number(p.purchase_price) || 0,
         status,
         new Date(p.updated_at).toLocaleString('en-IN')
       ].join(',')
@@ -371,9 +399,41 @@ export default function Inventory() {
     setLoading(true)
     const { data, error } = await fetchAllProducts()
     if (!error && data) {
-      setProducts(data as InventoryProduct[])
+      const mapped: InventoryProduct[] = (data || []).map((raw: any) => {
+        const rawPrice = raw.price ?? raw.rate ?? raw.selling_price ?? raw.unit_price
+        const parsedPrice = rawPrice !== null && rawPrice !== undefined && rawPrice !== '' ? Number(rawPrice) : 0
+        const price = Number.isFinite(parsedPrice) ? parsedPrice : 0
+
+        const rawCost = raw.purchase_price ?? raw.cost_price
+        const parsedCost = rawCost !== null && rawCost !== undefined && rawCost !== '' ? Number(rawCost) : 0
+        const purchasePrice = Number.isFinite(parsedCost) ? parsedCost : 0
+
+        const rawStock = raw.stock_quantity ?? raw.stock
+        const parsedStock = rawStock !== null && rawStock !== undefined && rawStock !== '' ? Number(rawStock) : 0
+        const stockQuantity = Number.isFinite(parsedStock) ? parsedStock : 0
+
+        const rawAlert = raw.low_stock_alert
+        const parsedAlert = rawAlert !== null && rawAlert !== undefined && rawAlert !== '' ? Number(rawAlert) : 5
+        const lowStockAlert = Number.isFinite(parsedAlert) ? parsedAlert : 5
+
+        return {
+          ...raw,
+          id: raw.id,
+          name: String(raw.name || ''),
+          category: String(raw.category || ''),
+          price,
+          purchase_price: purchasePrice,
+          stock_quantity: stockQuantity,
+          low_stock_alert: lowStockAlert,
+          is_active: raw.is_active !== false,
+          updated_at: raw.updated_at || new Date().toISOString(),
+          image_url: raw.image_url || raw.image || '/product-placeholder.svg',
+          has_variants: Boolean(raw.has_variants),
+        }
+      })
+      setProducts(mapped)
       // Process authoritative stock update without playing sound on load
-      inventoryAlertService.processStockUpdate(data as InventoryProduct[], globalLimit)
+      inventoryAlertService.processStockUpdate(mapped, globalLimit)
     }
     setLoading(false)
   }, [globalLimit])
@@ -386,13 +446,14 @@ export default function Inventory() {
   useEffect(() => {
     void fetchProducts()
     void fetchCategories()
-  }, [fetchProducts, fetchCategories])
+    void fetchVariants()
+  }, [fetchProducts, fetchCategories, fetchVariants])
 
   // ── Stock Management ──────────────────────────────────────────────
   const normalCount = products.filter(p => getStatus(p, globalLimit) === 'ok').length
   const lowCount = products.filter(p => getStatus(p, globalLimit) === 'low').length
   const outCount = products.filter(p => getStatus(p, globalLimit) === 'out').length
-  const stockValue = products.reduce((s, p) => s + (p.stock_quantity * p.price), 0)
+  const stockValue = products.reduce((s, p) => s + (Number(p.stock_quantity || 0) * getProductPrice(p)), 0)
 
   const filtered = products.filter(p => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase())
@@ -404,9 +465,13 @@ export default function Inventory() {
   })
 
   const openAdjust = (product: InventoryProduct) => {
-    // Open adjustment modal safely without triggering any audio
+    const status = getStatus(product, globalLimit)
+    if (status === 'low' || status === 'out') {
+      play('alert')
+    }
     setAdjustModal({ product, newQty: String(product.stock_quantity), adjustType: 'restock', note: '' })
   }
+
 
   const openHistory = async (p: InventoryProduct) => {
     setHistoryModal(p)
@@ -424,26 +489,33 @@ export default function Inventory() {
     setSaving(true)
     try {
       const oldQty = product.stock_quantity
-      const { error: updateErr } = await updateProduct(product.id, {
-        stock_quantity: newQtyNum,
-      })
-      if (updateErr) throw new Error(updateErr)
+      const delta = newQtyNum - oldQty
 
+      // Call the new Neon-backed adjust-stock endpoint
+      const res = await fetch('/api/inventory/adjust-stock', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: product.id, delta }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error || `adjust-stock failed (${res.status})`)
+      }
+
+      // Log the audit trail
       await createInventoryLog({
         product_id: product.id,
         old_quantity: oldQty,
         new_quantity: newQtyNum,
-        adjustment: newQtyNum - oldQty,
+        adjustment: delta,
         reason: adjustType === 'restock' ? 'restock' : adjustType === 'loss' ? 'loss' : adjustType === 'return' ? 'return' : 'manual_adjustment',
         reference_id: note || null,
       })
 
-      // Transition engine records change (triggers sound ONLY on genuine NORMAL -> LOW_STOCK transition)
+      // Transition engine: triggers the existing alert service (for in-app toast/banner)
       inventoryAlertService.recordStockChange(product, oldQty, newQtyNum, globalLimit)
 
-      if (newQtyNum > oldQty) {
-        play('success')
-      }
+      play('success')
       setAdjustModal(null)
       void fetchProducts()
     } catch (err: unknown) {
@@ -454,14 +526,16 @@ export default function Inventory() {
     }
   }
 
+
   // ── Product Management ──────────────────────────────────────────────
   const startEditProduct = (p: InventoryProduct) => {
     setEditingProduct(p)
+    const effectivePrice = getProductPrice(p)
     setProductForm({
       name: p.name,
       category: p.category || '',
-      price: String(p.price),
-      purchase_price: String(p.purchase_price || ''),
+      price: effectivePrice > 0 ? String(effectivePrice) : (p.price ? String(p.price) : ''),
+      purchase_price: p.purchase_price ? String(p.purchase_price) : '',
       stock_quantity: String(p.stock_quantity),
       low_stock_alert: String(p.low_stock_alert || 5),
       is_active: p.is_active,
@@ -723,7 +797,7 @@ export default function Inventory() {
                             <span className="whitespace-nowrap bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full text-[10px] font-black uppercase">Normal</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-sm font-black text-[#111111] whitespace-nowrap">{formatCurrency(p.price)}</td>
+                        <td className="px-4 py-3 text-sm font-black text-[#111111] whitespace-nowrap">{formatCurrency(getProductPrice(p))}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5">
                             <button onClick={() => openAdjust(p)}
@@ -878,7 +952,7 @@ export default function Inventory() {
                   <div key={String(p.id)} className={`flex items-center justify-between px-4 py-3 hover:bg-[#FAFAFA] ${editingProduct?.id === p.id ? 'bg-orange-50 border-l-4 border-[#2E7D32]' : ''}`}>
                     <div className="min-w-0">
                       <p className="font-bold text-sm text-[#111111] truncate">{p.name}</p>
-                      <p className="text-[11px] text-[#6B7280]">{p.category || 'No category'} · {formatCurrency(p.price)} · Stock: <span className={`font-black ${getStatus(p) === 'out' ? 'text-red-600' : getStatus(p) === 'low' ? 'text-orange-600' : 'text-green-600'}`}>{p.stock_quantity}</span></p>
+                      <p className="text-[11px] text-[#6B7280]">{p.category || 'No category'} · {formatCurrency(getProductPrice(p))} · Stock: <span className={`font-black ${getStatus(p) === 'out' ? 'text-red-600' : getStatus(p) === 'low' ? 'text-orange-600' : 'text-green-600'}`}>{p.stock_quantity}</span></p>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0 ml-2">
                       {!p.is_active && <span className="text-[10px] font-black uppercase text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Hidden</span>}
@@ -962,12 +1036,12 @@ export default function Inventory() {
       )}
 
       {/* 📊 ANALYTICS & REPORTS TAB 📊 */}
-      {activeTab === 'analytics' && <InventoryAnalytics products={products} downloadCSV={downloadCSV} />}
+      {activeTab === 'analytics' && <InventoryAnalytics products={products} downloadCSV={downloadCSV} getProductPrice={getProductPrice} />}
 
       {/* ── Adjust Stock Modal ── */}
       {adjustModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-lg font-black text-[#111111]">Adjust Inventory Stock (Selvakkodi Agro Service)</h2>
@@ -1101,7 +1175,7 @@ export default function Inventory() {
               ) : historyLogs.length === 0 ? (
                 <div className="py-12 text-center text-sm font-bold text-[#6B7280]">No stock movement recorded for this item yet.</div>
               ) : (
-                <div className="border border-[#A5D6A7]/60 rounded-xl overflow-hidden">
+                <div className="border border-[#A5D6A7]/60 rounded-xl overflow-x-auto">
                   <table className="w-full text-left">
                     <thead className="bg-[#FAFAFA] border-b border-[#A5D6A7]/60 text-[10px] font-black uppercase text-[#374151]">
                       <tr>

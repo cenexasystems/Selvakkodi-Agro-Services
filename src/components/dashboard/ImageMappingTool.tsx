@@ -36,7 +36,7 @@ type UploadResult = {
   url?: string
 }
 
-const LS_KEY = 'thenn-nadu-image-mappings'
+const LS_KEY = 'selvakkodi-image-mappings'
 const IMAGES_BASE = '/assets/Images_V2/'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -48,7 +48,8 @@ const imgUrl = (filename: string) =>
 
 const loadFromStorage = (): Mappings => {
   try {
-    return JSON.parse(localStorage.getItem(LS_KEY) || '{}') as Mappings
+    const saved = localStorage.getItem(LS_KEY) || localStorage.getItem('thenn-nadu-image-mappings')
+    return JSON.parse(saved || '{}') as Mappings
   } catch {
     return {}
   }

@@ -154,7 +154,7 @@ const exportCSV = (orders: BillingOrder[]) => {
       toNumber(order.discount_amount, 0).toFixed(2),
       toNumber(order.delivery_charge, 0).toFixed(2),
       toNumber(order.total, 0).toFixed(2),
-      new Date(order.created_at).toLocaleDateString('en-MY'),
+      new Date(order.created_at).toLocaleDateString('en-IN'),
       order.status,
     ]
   })
@@ -396,7 +396,7 @@ export default function BillingAnalytics() {
       const key = date.toISOString().slice(0, 7)
       return {
         key,
-        month: date.toLocaleDateString('en-MY', { month: 'short' }),
+        month: date.toLocaleDateString('en-IN', { month: 'short' }),
         revenue: monthlyRevenueMap.get(key) || 0,
       }
     })
@@ -413,7 +413,7 @@ export default function BillingAnalytics() {
       date.setDate(weekStart.getDate() + index)
       const key = date.toISOString().slice(0, 10)
       return {
-        day: date.toLocaleDateString('en-MY', { weekday: 'long' }),
+        day: date.toLocaleDateString('en-IN', { weekday: 'long' }),
         date: key,
         revenue: weeklyRevenueMap.get(key) || 0,
       }
@@ -573,7 +573,7 @@ export default function BillingAnalytics() {
     <div className="admin-shell min-h-screen bg-white">
       <div className="mx-auto max-w-[1600px] px-4 py-4 sm:px-6 lg:px-8">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div className="admin-logo-lockup min-w-[280px]">
+          <div className="admin-logo-lockup min-w-0 sm:min-w-[280px]">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white border border-emerald-900/30 p-1 shadow-sm overflow-hidden shrink-0">
                 <img src={BRAND_LOGO} alt={`${BRAND_EN} logo`} className="h-full w-full object-contain" />
               </div>
@@ -791,7 +791,7 @@ export default function BillingAnalytics() {
                         <td className="px-3 py-3">{order.discount_amount > 0 ? <span className="font-bold text-green-700">-{formatCurrency(order.discount_amount)}</span> : <span className="text-[#9BAB9A]">—</span>}</td>
                         <td className="px-3 py-3">{order.delivery_charge > 0 ? <span className="font-bold">{formatCurrency(order.delivery_charge)}</span> : <span className="text-[#9BAB9A]">—</span>}</td>
                         <td className="whitespace-nowrap px-3 py-3 font-bold">{formatCurrency(toNumber(order.total, 0))}</td>
-                        <td className="whitespace-nowrap px-3 py-3 text-[#374151]">{new Date(order.created_at).toLocaleDateString('en-MY')}</td>
+                        <td className="whitespace-nowrap px-3 py-3 text-[#374151]">{new Date(order.created_at).toLocaleDateString('en-IN')}</td>
                         <td className="px-3 py-3">
                           <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${normalizeStatus(order.status) === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                             {normalizeStatus(order.status) || 'pending'}

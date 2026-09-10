@@ -321,7 +321,7 @@ export default function Profile() {
                           className="flex-1 px-4 py-3 rounded-xl border-2 border-sand focus:border-sageDark outline-none text-[13px]"
                           value={editPhone}
                           onChange={e => { setEditPhone(e.target.value.replace(/\D/g, '')); setSaveErr('') }}
-                          placeholder="0123456789"
+                          placeholder="9080788263"
                         />
                       </div>
                     </div>

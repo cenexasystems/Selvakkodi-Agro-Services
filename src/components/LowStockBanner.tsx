@@ -49,9 +49,9 @@ export function LowStockBanner({ onNavigateToInventory, embedded = false }: LowS
             {alerts.length > 1 && (
               <div className="mt-2 max-h-28 overflow-y-auto space-y-1 text-xs">
                 {alerts.slice(0, 4).map(a => (
-                  <div key={a.id} className="flex items-center justify-between text-[#374151] font-medium">
-                    <span className="truncate max-w-[200px]">{a.productName}</span>
-                    <span className={`px-1.5 py-0.5 rounded font-black text-[10px] ${a.type === 'out' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>
+                  <div key={a.id} className="flex items-center justify-between text-[#374151] font-medium min-w-0">
+                    <span className="truncate min-w-0 flex-1 mr-2">{a.productName}</span>
+                    <span className={`px-1.5 py-0.5 rounded font-black text-[10px] shrink-0 ${a.type === 'out' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>
                       {a.type === 'out' ? 'Out of Stock' : `${a.stock} left (limit ${a.limit})`}
                     </span>
                   </div>

@@ -45,9 +45,9 @@ export function printThermalReceipt(data: ThermalReceiptData) {
       // If date string has no time component (e.g. "2026-08-31"), use current time instead
       const hasTime = data.date.includes('T') || data.date.includes(' ')
       const display = hasTime ? d : new Date()
-      return display.toLocaleString('en-MY', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+      return display.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
     }
-    catch { return new Date().toLocaleString('en-MY') }
+    catch { return new Date().toLocaleString('en-IN') }
   })()
 
   const html = `

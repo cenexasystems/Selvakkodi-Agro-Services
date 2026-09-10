@@ -21,10 +21,37 @@ export async function fetchAllCategories(): Promise<{ data: Array<{ id: string |
   }
 }
 
+export function normalizeProduct(p: any): any {
+  if (!p || typeof p !== 'object') return p
+  const rawPrice = p.price ?? p.rate ?? p.selling_price ?? p.unit_price
+  const priceNum = rawPrice !== null && rawPrice !== undefined && rawPrice !== '' ? Number(rawPrice) : 0
+  const price = Number.isFinite(priceNum) ? priceNum : 0
+
+  const rawPurchase = p.purchase_price ?? p.cost_price
+  const purchaseNum = rawPurchase !== null && rawPurchase !== undefined && rawPurchase !== '' ? Number(rawPurchase) : 0
+  const purchase_price = Number.isFinite(purchaseNum) ? purchaseNum : 0
+
+  const rawStock = p.stock_quantity ?? p.stock
+  const stockNum = rawStock !== null && rawStock !== undefined && rawStock !== '' ? Number(rawStock) : 0
+  const stock_quantity = Number.isFinite(stockNum) ? stockNum : 0
+
+  const rawAlert = p.low_stock_alert
+  const alertNum = rawAlert !== null && rawAlert !== undefined && rawAlert !== '' ? Number(rawAlert) : 5
+  const low_stock_alert = Number.isFinite(alertNum) ? alertNum : 5
+
+  return {
+    ...p,
+    price,
+    purchase_price,
+    stock_quantity,
+    low_stock_alert,
+  }
+}
+
 export async function fetchAllProducts(): Promise<{ data: any[]; error: string | null }> {
   try {
     const products = await api.getProducts()
-    return { data: products || [], error: null }
+    return { data: (products || []).map(normalizeProduct), error: null }
   } catch (err: any) {
     return { data: [], error: err.message || 'Failed to fetch products' }
   }
@@ -33,7 +60,7 @@ export async function fetchAllProducts(): Promise<{ data: any[]; error: string |
 export async function fetchProductById(id: string | number): Promise<{ data: any | null; error: string | null }> {
   try {
     const product = await api.getProductById(id)
-    return { data: product || null, error: null }
+    return { data: product ? normalizeProduct(product) : null, error: null }
   } catch (err: any) {
     return { data: null, error: err.message || 'Failed to fetch product' }
   }
@@ -42,7 +69,7 @@ export async function fetchProductById(id: string | number): Promise<{ data: any
 export async function createProduct(payload: Record<string, unknown>): Promise<{ data: any | null; error: string | null }> {
   try {
     const product = await api.createProduct(payload)
-    return { data: product, error: null }
+    return { data: product ? normalizeProduct(product) : null, error: null }
   } catch (err: any) {
     return { data: null, error: err.message || 'Failed to create product' }
   }
@@ -54,7 +81,7 @@ export async function updateProduct(
 ): Promise<{ data: any | null; error: string | null }> {
   try {
     const product = await api.updateProduct(id, payload)
-    return { data: product, error: null }
+    return { data: product ? normalizeProduct(product) : null, error: null }
   } catch (err: any) {
     return { data: null, error: err.message || 'Failed to update product' }
   }

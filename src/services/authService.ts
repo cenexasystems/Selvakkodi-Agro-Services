@@ -279,4 +279,35 @@ export const authService = {
       return { error: err.message || 'Failed to update user role' }
     }
   },
+
+  /**
+   * Change password for the authenticated user via /api/auth/change-password
+   */
+  changePassword: async (params: {
+    currentPassword: string
+    newPassword: string
+    confirmPassword: string
+  }): Promise<{ success: boolean; error: string | null; message?: string }> => {
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify(params),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.success) {
+        return { success: false, error: json.error || json.message || 'Failed to change password.' }
+      }
+      if (json.data?.token) {
+        setStoredToken(json.data.token)
+        try {
+          localStorage.setItem('selvakkodi-admin-token', json.data.token)
+        } catch {}
+      }
+      return { success: true, error: null, message: json.message || 'Password changed successfully.' }
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Unable to reach password change service.' }
+    }
+  },
 }

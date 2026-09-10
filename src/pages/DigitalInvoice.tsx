@@ -182,22 +182,22 @@ export default function DigitalInvoice() {
   return (
     <div className="h-full overflow-y-auto bg-[#f9faf6] font-sans pb-12 print:bg-white print:pb-0">
       {/* Top action bar */}
-      <div className="bg-[#f9faf6] p-4 sticky top-0 z-50 print:hidden flex items-center justify-between max-w-4xl mx-auto">
-        <button onClick={handleBack} className="flex items-center gap-2 text-sageDark hover:text-[#2d5a27] font-semibold text-sm transition-colors bg-white border border-sand/40 px-4 py-2 rounded-full shadow-sm cursor-pointer">
-          <ArrowLeft size={16} /> Back
+      <div className="bg-[#f9faf6] p-3 sm:p-4 sticky top-0 z-50 print:hidden flex items-center justify-between max-w-4xl mx-auto gap-2">
+        <button onClick={handleBack} className="flex items-center gap-1.5 sm:gap-2 text-sageDark hover:text-[#2d5a27] font-semibold text-xs sm:text-sm transition-colors bg-white border border-sand/40 px-3 sm:px-4 py-2 rounded-full shadow-sm cursor-pointer shrink-0">
+          <ArrowLeft size={15} /> Back
         </button>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <button
             onClick={downloadPdf}
-            className="flex items-center gap-2 bg-[#2E7D32] text-white px-5 py-2 rounded-full font-bold text-sm shadow-md hover:bg-[#C73660] transition-colors"
+            className="flex items-center gap-1.5 sm:gap-2 bg-[#2E7D32] text-white px-3.5 sm:px-5 py-2 rounded-full font-bold text-xs sm:text-sm shadow-md hover:bg-[#1B5E20] transition-colors shrink-0"
           >
-            <Printer size={16} /> PDF
+            <Printer size={15} /> PDF
           </button>
           <button
             onClick={shareViaWhatsApp}
-            className="flex items-center gap-2 bg-green-500 text-white px-5 py-2 rounded-full font-bold text-sm shadow-md hover:bg-green-600 transition-colors"
+            className="flex items-center gap-1.5 sm:gap-2 bg-green-500 text-white px-3.5 sm:px-5 py-2 rounded-full font-bold text-xs sm:text-sm shadow-md hover:bg-green-600 transition-colors shrink-0"
           >
-            <MessageCircle size={16} /> WhatsApp
+            <MessageCircle size={15} /> WhatsApp
           </button>
         </div>
       </div>

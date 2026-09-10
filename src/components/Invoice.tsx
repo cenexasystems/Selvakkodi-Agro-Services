@@ -234,7 +234,22 @@ export const Invoice: React.FC<InvoiceProps> = ({
           display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
         }}
       >
-        <div style={{ fontSize: 12, fontWeight: 800, color: '#2E7D32' }}>Thank you for shopping!</div>
+        <div style={{ fontSize: 12, fontWeight: 800, color: '#2E7D32', textAlign: 'center' }}>
+          Thank you for choosing Selvakkodi Agro Service
+        </div>
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 700,
+            color: '#2E7D32',
+            marginTop: 4,
+            textAlign: 'center',
+            fontFamily: "'Noto Sans Tamil', 'Inter', sans-serif",
+            lineHeight: 1.5,
+          }}
+        >
+          செல்வக்கொடி அக்ரோ சர்வீஸை தேர்ந்தெடுத்ததற்கு நன்றி!
+        </div>
         {onPrintReceipt && (
           <button
             type="button"

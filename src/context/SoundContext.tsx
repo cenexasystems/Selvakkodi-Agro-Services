@@ -12,12 +12,12 @@ const SoundContext = createContext<SoundContextType | undefined>(undefined);
 
 export function SoundProvider({ children }: { children: React.ReactNode }) {
   const [soundEnabled, setSoundEnabled] = useState(() => {
-    const saved = localStorage.getItem('thenn_nadu_sounds');
+    const saved = localStorage.getItem('selvakkodi_sounds') || localStorage.getItem('thenn_nadu_sounds');
     return saved !== null ? JSON.parse(saved) : true;
   });
 
   useEffect(() => {
-    localStorage.setItem('thenn_nadu_sounds', JSON.stringify(soundEnabled));
+    localStorage.setItem('selvakkodi_sounds', JSON.stringify(soundEnabled));
   }, [soundEnabled]);
 
   const play = (type: SoundType) => {

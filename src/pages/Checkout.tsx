@@ -322,12 +322,12 @@ export default function Checkout() {
                 </label>
                 <div className="flex gap-2">
                   <span className="flex items-center px-3 py-3 bg-[#F9FAFB] border-2 border-sand rounded-xl text-[13px] font-bold text-textMuted shrink-0">
-                    🇮🇳 +60
+                    🇮🇳 +91
                   </span>
                   <input
                     value={form.phone}
                     onChange={e => setForm({ ...form, phone: e.target.value })}
-                    placeholder="0123456789 or +60 12-345 6789"
+                    placeholder="9080788263 or +91 90807 88263"
                     className={`flex-1 px-4 py-2.5 sm:py-3 border-2 rounded-xl outline-none transition-colors ${
                       form.phone && !isValidPhone(form.phone)
                         ? 'border-red-400 focus:border-red-500'

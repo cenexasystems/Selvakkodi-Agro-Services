@@ -443,7 +443,21 @@ export const useCartStore = create<CartState>()(
       count: () => get().totalItems(),
       total: () => get().cartSubtotal(),
     }),
-    { name: 'purple-boutique-cart' }
+    {
+      name: 'selvakkodi-cart',
+      storage: {
+        getItem: (name) => {
+          const str = localStorage.getItem(name) || localStorage.getItem('purple-boutique-cart')
+          if (!str) return null
+          try { return JSON.parse(str) } catch { return null }
+        },
+        setItem: (name, val) => localStorage.setItem(name, JSON.stringify(val)),
+        removeItem: (name) => {
+          localStorage.removeItem(name)
+          localStorage.removeItem('purple-boutique-cart')
+        }
+      }
+    }
   )
 )
 
@@ -462,7 +476,21 @@ export const useFavStore = create<FavState>()(
       isFav: (productId) => get().items.some((p) => p.id === productId),
       clear: () => set({ items: [] }),
     }),
-    { name: 'purple-boutique-favorites' },
+    {
+      name: 'selvakkodi-favorites',
+      storage: {
+        getItem: (name) => {
+          const str = localStorage.getItem(name) || localStorage.getItem('purple-boutique-favorites')
+          if (!str) return null
+          try { return JSON.parse(str) } catch { return null }
+        },
+        setItem: (name, val) => localStorage.setItem(name, JSON.stringify(val)),
+        removeItem: (name) => {
+          localStorage.removeItem(name)
+          localStorage.removeItem('purple-boutique-favorites')
+        }
+      }
+    },
   ),
 )
 
@@ -554,40 +582,6 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
 }))
 
 // --- Admin Auth Store ---
-const getEnv = (key: string, fallback: string) => {
-  const val = import.meta.env[key] as string | undefined
-  return val && val.trim() !== '' && val !== 'undefined' ? val.trim() : fallback
-}
-
-const ADMIN_PORTAL_ID = getEnv('VITE_ADMIN_ID', 'admin')
-const STAFF_PORTAL_ID = getEnv('VITE_STAFF_ID', 'staff')
-
-// Salted SHA-256 hashes for default credentials (no plaintext passwords in source code)
-const DEFAULT_ADMIN_HASH = '6ac5fd41a1c6fae35cccd523c76644d8d1836d6cc79e692b3b1e7daca321435d'
-const DEFAULT_STAFF_HASH = '6d39235ecd7e3a15165834379b2bc4a82d3b0cd405ac69026d411614b170e3b0'
-
-const ADMIN_PORTAL_HASH = getEnv('VITE_ADMIN_PASSWORD_HASH', DEFAULT_ADMIN_HASH)
-const STAFF_PORTAL_HASH = getEnv('VITE_STAFF_PASSWORD_HASH', DEFAULT_STAFF_HASH)
-
-const hashCredential = async (id: string, pwd: string): Promise<string> => {
-  const normalized = `sas_auth_v1:${id.trim().toLowerCase()}:${pwd.trim()}`
-  const encoder = new TextEncoder()
-  const data = encoder.encode(normalized)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  return Array.from(new Uint8Array(hashBuffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('')
-}
-
-const safeCompare = (a: string, b: string): boolean => {
-  if (a.length !== b.length) return false
-  let result = 0
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  }
-  return result === 0
-}
-
 export type AdminRole = 'admin' | 'staff' | null
 
 interface AdminAuthState {
@@ -617,7 +611,7 @@ export const useAdminAuthStore = create<AdminAuthState>()(
         const pwd = password.trim()
         if (!id || !pwd) return false
 
-        // 1. Primary: Serverless authentication against Neon API
+        // Server-side authentication against Neon API
         try {
           const res = await fetch('/api/auth/admin/login', {
             method: 'POST',
@@ -634,46 +628,14 @@ export const useAdminAuthStore = create<AdminAuthState>()(
               const user = data.data.user || null
               if (token) {
                 localStorage.setItem('selvakkodi-admin-token', token)
+                localStorage.setItem('selvakkodi_auth_token', token)
               }
               set({ isLoggedIn: true, role, user, token })
               return role
             }
           }
         } catch (serverErr) {
-          console.warn('Server auth call unreachable, testing local fallback...', serverErr)
-        }
-
-        // 2. Fallback: Offline / dev environment credential check
-        try {
-          const attemptHash = await hashCredential(id.toLowerCase(), pwd)
-
-          const customAdminPwd = getEnv('VITE_ADMIN_PASSWORD', '')
-          const customStaffPwd = getEnv('VITE_STAFF_PASSWORD', '')
-
-          const expectedAdminHash = customAdminPwd ? await hashCredential(ADMIN_PORTAL_ID, customAdminPwd) : ADMIN_PORTAL_HASH
-          const expectedStaffHash = customStaffPwd ? await hashCredential(STAFF_PORTAL_ID, customStaffPwd) : STAFF_PORTAL_HASH
-
-          if (id.toLowerCase() === ADMIN_PORTAL_ID.toLowerCase() && safeCompare(attemptHash, expectedAdminHash)) {
-            set({
-              isLoggedIn: true,
-              role: 'admin',
-              user: { name: 'Administrator', role: 'admin' },
-              token: null,
-            })
-            return 'admin'
-          }
-
-          if (id.toLowerCase() === STAFF_PORTAL_ID.toLowerCase() && safeCompare(attemptHash, expectedStaffHash)) {
-            set({
-              isLoggedIn: true,
-              role: 'staff',
-              user: { name: 'Store Staff', role: 'staff' },
-              token: null,
-            })
-            return 'staff'
-          }
-        } catch (e) {
-          console.error('Auth verification error', e)
+          console.error('Server auth call failed:', serverErr)
         }
 
         return false
@@ -683,6 +645,7 @@ export const useAdminAuthStore = create<AdminAuthState>()(
           fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {})
         } catch {}
         localStorage.removeItem('selvakkodi-admin-token')
+        localStorage.removeItem('selvakkodi_auth_token')
         set({ isLoggedIn: false, role: null, user: null, token: null })
       },
     }),

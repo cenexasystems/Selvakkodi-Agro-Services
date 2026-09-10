@@ -31,10 +31,13 @@ import {
   BRAND_WHATSAPP_LINK,
 } from '../lib/brand'
 
-// localStorage fallback (only used when Supabase is not configured)
-const LS_KEY = 'thenn_nadu_customer_reviews'
+// localStorage fallback (only used when Neon review service is not reachable)
+const LS_KEY = 'selvakkodi_customer_reviews'
 function lsGetReviews(): CustomerReview[] {
-  try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]') } catch { return [] }
+  try {
+    const data = localStorage.getItem(LS_KEY) || localStorage.getItem('thenn_nadu_customer_reviews')
+    return JSON.parse(data || '[]')
+  } catch { return [] }
 }
 function lsSaveReview(r: CustomerReview) {
   const all = lsGetReviews()

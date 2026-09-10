@@ -4,7 +4,7 @@ import {
   Box, Receipt, AlertCircle, ArrowUp, ArrowDown, Power, Download, TrendingUp,
   Package, Search, RefreshCw, ShieldCheck, ShieldOff, Trophy,
   MessageCircle, ChevronDown, Eye, FileText, Printer, MoreVertical, X, Users, AlertTriangle,
-  Settings, Bell, CheckCircle, Store, Sliders,
+  Settings, Bell, CheckCircle, Store, Sliders, KeyRound, Lock,
 } from 'lucide-react'
 
 // Custom Indian Rupee icon
@@ -39,7 +39,7 @@ import { debounce } from '../lib/debounce'
 import { useAuthStore, useProductStore, useAdminAuthStore, useSettingsStore, type Product } from '../store/store'
 import { inventoryAlertService } from '../services/inventoryAlertService'
 import { LowStockBanner } from '../components/LowStockBanner'
-import { LowStockAlarmOverlay } from '../components/LowStockAlarmOverlay'
+import LowStockAlarmModal from '../components/LowStockAlarmModal'
 import { categoryService } from '../services/categoryService'
 import { orderService } from '../services/orderService'
 import { couponService } from '../services/couponService'
@@ -64,6 +64,7 @@ import { createVariant, updateVariant, deleteVariant, setDefaultVariant, type Pr
 import { useVariantStore } from '../store/store'
 import Pos from './Pos'
 import AdvanceOrders from './AdvanceOrders'
+import ChangePasswordModal from '../components/ChangePasswordModal'
 import type { AdvanceOrder } from '../services/advanceOrderService'
 import {
   ResponsiveContainer,
@@ -144,7 +145,7 @@ const exportCSV = (orders: DashboardOrder[]) => {
   const header = ['Order Ref', 'Customer', 'Phone', 'Date', 'Total (₹)', 'Order Type', 'Status']
   const rows = orders.map(o => [
     o.order_type === 'online_request' ? o.id : o.invoice_no, o.customer_name, o.phone,
-    new Date(o.created_at).toLocaleDateString('en-MY'),
+    new Date(o.created_at).toLocaleDateString('en-IN'),
     getOrderTotal(o).toFixed(2), o.order_type, o.status,
   ])
   const csv = [header, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
@@ -261,6 +262,7 @@ export default function Dashboard() {
   const [settingsSaving, setSettingsSaving] = useState(false)
   const [settingsSaveSuccess, setSettingsSaveSuccess] = useState('')
   const [settingsSaveError, setSettingsSaveError] = useState('')
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
 
   useEffect(() => {
     if (settings) {
@@ -357,7 +359,14 @@ export default function Dashboard() {
     err instanceof Error ? err.message
     : (err && typeof err === 'object' && 'message' in err) ? String((err as {message?:unknown}).message) || fb : fb
 
+  // Counts every click on the Inventory nav button — used to force the alarm
+  // modal to re-fetch even when 'inventory' is already the active tab
+  const inventoryClickCount = React.useRef(0)
+
   const handleTabClick = (tabKey: TabKey) => {
+    if (tabKey === 'inventory') {
+      inventoryClickCount.current += 1
+    }
     setTab(tabKey)
   }
 
@@ -615,7 +624,7 @@ export default function Dashboard() {
     const monthlyTrend = Array.from({ length: 12 }, (_, i) => {
       const d = new Date(chartYear, i, 1)
       const k = toLocalMonthKey(d)
-      return { key: k, month: d.toLocaleDateString('en-MY', { month: 'short' }), revenue: monthlyRevenueMap.get(k) || 0 }
+      return { key: k, month: d.toLocaleDateString('en-IN', { month: 'short' }), revenue: monthlyRevenueMap.get(k) || 0 }
     })
 
     const weeklyRevenueMap = new Map<string, number>()
@@ -1695,6 +1704,15 @@ export default function Dashboard() {
               )}
             </div>
 
+            <button
+              type="button"
+              onClick={() => setChangePasswordOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#A5D6A7]/70 text-[#1B5E20] hover:bg-emerald-50 text-xs font-bold transition-colors shadow-sm"
+              title="Change Account Password"
+            >
+              <KeyRound size={14} /> {l('Password', 'கடவுச்சொல்')}
+            </button>
+
             <Link
               to="/pos"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-maroon-dark text-white text-xs font-bold hover:bg-maroon transition-colors"
@@ -1822,7 +1840,7 @@ export default function Dashboard() {
                             <td className="px-3 py-2.5 font-bold text-[#10B981] text-[11px]">{formatInvoiceNo(o.invoice_no)}</td>
                             <td className="px-3 py-2.5 font-semibold text-[#111111] max-w-[100px] truncate">{o.customer_name}</td>
                             <td className="px-3 py-2.5 font-black text-[#111111]">{formatCurrency(getOrderTotal(o))}</td>
-                            <td className="px-3 py-2.5 text-[#7A846F] whitespace-nowrap">{new Date(o.created_at).toLocaleDateString('en-MY', { day: '2-digit', month: 'short' })}</td>
+                            <td className="px-3 py-2.5 text-[#7A846F] whitespace-nowrap">{new Date(o.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</td>
                             <td className="px-3 py-2.5"><span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${btClass}`}>{btLabel}</span></td>
                             <td className="px-3 py-2.5">
                               <span className={`text-[11px] font-black px-2 py-0.5 rounded-lg ${normalizeStatus(o.status) === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
@@ -2069,8 +2087,8 @@ export default function Dashboard() {
                               </td>
                               <td className="px-4 py-3 font-black text-[#111111]">{formatCurrency(getOrderTotal(order))}</td>
                               <td className="px-4 py-3 text-[#7A846F] whitespace-nowrap text-[11px]">
-                                <div>{new Date(order.created_at).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
-                                <div className="text-[10px]">{new Date(order.created_at).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' })}</div>
+                                <div>{new Date(order.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                                <div className="text-[10px]">{new Date(order.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
                               </td>
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-2">
@@ -2566,7 +2584,7 @@ export default function Dashboard() {
                                 <td className="px-3 py-2.5 font-bold text-[#10B981] text-[11px]">{formatInvoiceNo(o.invoice_no)}</td>
                                 <td className="px-3 py-2.5 font-semibold text-[#111111] max-w-[100px] truncate">{o.customer_name}</td>
                                 <td className="px-3 py-2.5 font-black text-[#111111]">{formatCurrency(getOrderTotal(o))}</td>
-                                <td className="px-3 py-2.5 text-[#374151] whitespace-nowrap">{new Date(o.created_at).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' })}</td>
+                                <td className="px-3 py-2.5 text-[#374151] whitespace-nowrap">{new Date(o.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</td>
                                 <td className="px-3 py-2.5"><span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${btClass}`}>{btLabel}</span></td>
                                 <td className="px-3 py-2.5">
                                   <button onClick={() => void openOrderInvoice(o, 'view')} className="inline-flex items-center gap-1 rounded-lg border border-[#A5D6A7]/60 px-2 py-1.5 text-[11px] font-black text-[#111111] hover:bg-[#F9FAFB]" title="View Invoice">
@@ -2987,7 +3005,7 @@ export default function Dashboard() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-[13px] font-black text-[#111111] break-words">{formatInvoiceNo(o.invoice_no)}</p>
-                          <p className="text-[13px] text-[#374151]">{new Date(o.created_at).toLocaleDateString('en-MY')}</p>
+                          <p className="text-[13px] text-[#374151]">{new Date(o.created_at).toLocaleDateString('en-IN')}</p>
                         </div>
                         <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ${billTypeClass}`}>{billTypeLabel}</span>
                       </div>
@@ -3086,7 +3104,7 @@ export default function Dashboard() {
                             {o.delivery_charge > 0 ? <span className="font-bold text-[#111111]">{formatCurrency(o.delivery_charge)}</span> : <span className="text-[#9BAB9A]">—</span>}
                           </td>
                           <td className="whitespace-nowrap px-2 py-3 text-[11px] font-bold text-[#111111]">{formatCurrency(getOrderTotal(o))}</td>
-                          <td className="whitespace-nowrap px-2 py-3 text-[11px] text-[#374151]">{new Date(o.created_at).toLocaleDateString('en-MY')}</td>
+                          <td className="whitespace-nowrap px-2 py-3 text-[11px] text-[#374151]">{new Date(o.created_at).toLocaleDateString('en-IN')}</td>
                           <td className="px-2 py-3">
                             <div className="flex items-center justify-center gap-1.5">
                               <select value={normalizeStatus(o.status)} onChange={e => void updateOrderStatus(o.id, e.target.value)}
@@ -3374,7 +3392,7 @@ export default function Dashboard() {
 
                             <p className="text-[11px] text-[#6C665C]">
                               Used {coupon.usage_count}{coupon.usage_limit ? `/${coupon.usage_limit}` : ''} times
-                              {coupon.expiry_date ? ` • expires ${new Date(coupon.expiry_date).toLocaleDateString('en-MY')}` : ''}
+                              {coupon.expiry_date ? ` • expires ${new Date(coupon.expiry_date).toLocaleDateString('en-IN')}` : ''}
                             </p>
                           </div>
 
@@ -3490,7 +3508,7 @@ export default function Dashboard() {
                             <td className="px-6 py-4 text-[#6B7280]">{u.email || '-'}</td>
                             <td className="px-6 py-4 text-[#6B7280]">{u.mobile || '-'}</td>
                             <td className="px-6 py-4 text-[#6B7280] text-[12px]">
-                              {u.created_at ? new Date(u.created_at).toLocaleDateString('en-MY') : '-'}
+                              {u.created_at ? new Date(u.created_at).toLocaleDateString('en-IN') : '-'}
                             </td>
                             <td className="px-6 py-4 text-center">
                               <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider ${
@@ -3679,6 +3697,27 @@ export default function Dashboard() {
                 </button>
               </div>
             </form>
+
+            {/* Card 4: Account Security & Password Change */}
+            <div className="bg-white rounded-2xl border border-borderLight p-6 shadow-sm space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-wider text-[#2E7D32] flex items-center gap-2">
+                    <Lock size={16} /> {l('Account Security', 'கணக்கு பாதுகாப்பு')}
+                  </h3>
+                  <p className="text-xs text-[#6B7280] mt-1">
+                    {l('Update your login password securely in the Neon database.', 'உங்கள் உள்நுழைவு கடவுச்சொல்லை பாதுகாப்பாக மாற்றவும்.')}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setChangePasswordOpen(true)}
+                  className="flex items-center gap-1.5 px-4 py-2.5 bg-[#1B5E20] text-white rounded-xl text-xs font-black hover:bg-[#154a19] transition-colors shadow-sm"
+                >
+                  <KeyRound size={14} /> {l('Change Password', 'கடவுச்சொல்லை மாற்று')}
+                </button>
+              </div>
+            </div>
           </div>
         )}
         </div>
@@ -3767,7 +3806,14 @@ export default function Dashboard() {
         />
       )}
 
-      <LowStockAlarmOverlay />
+      <LowStockAlarmModal
+        triggerKey={tab === 'inventory' ? `inventory:${inventoryClickCount.current}` : tab}
+      />
+
+      <ChangePasswordModal
+        isOpen={changePasswordOpen}
+        onClose={() => setChangePasswordOpen(false)}
+      />
     </div>
   )
 }
