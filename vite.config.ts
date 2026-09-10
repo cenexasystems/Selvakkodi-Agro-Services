@@ -1,8 +1,7 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
-import fs from 'fs'
-import path from 'path'
+
 
 function vercelApiDevPlugin(): Plugin {
   return {
@@ -10,41 +9,12 @@ function vercelApiDevPlugin(): Plugin {
     configureServer(server) {
       server.middlewares.use(async (req: any, res: any, next: any) => {
         const [pathOnly, rawQuery] = (req.url || '').split('?')
-        if (!pathOnly.startsWith('/api/')) {
+        if (!pathOnly.startsWith('/api/') && pathOnly !== '/api') {
           return next()
         }
 
         const queryParams = new URLSearchParams(rawQuery || '')
         req.query = Object.fromEntries(queryParams.entries())
-
-        const endpointPath = pathOnly.replace(/^\/api\//, '')
-        const segments = endpointPath.split('/').filter(Boolean)
-        const candidates: Array<{ path: string; params: Record<string, string> }> = [
-          { path: `./api/${endpointPath}.ts`, params: {} },
-          { path: `./api/${endpointPath}/index.ts`, params: {} },
-        ]
-
-        if (segments.length === 2) {
-          candidates.push({
-            path: `./api/${segments[0]}/[id].ts`,
-            params: { id: decodeURIComponent(segments[1]) },
-          })
-          candidates.push({
-            path: `./api/${segments[0]}/[id]/index.ts`,
-            params: { id: decodeURIComponent(segments[1]) },
-          })
-        }
-
-        if (segments.length === 3) {
-          candidates.push({
-            path: `./api/${segments[0]}/[id]/${segments[2]}.ts`,
-            params: { id: decodeURIComponent(segments[1]) },
-          })
-          candidates.push({
-            path: `./api/${segments[0]}/${segments[1]}/${segments[2]}.ts`,
-            params: {},
-          })
-        }
 
         try {
           if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method || '')) {
@@ -72,42 +42,22 @@ function vercelApiDevPlugin(): Plugin {
             return res
           }
 
-          for (const c of candidates) {
-            const absolutePath = path.resolve(process.cwd(), c.path)
-            if (!fs.existsSync(absolutePath)) {
-              continue
-            }
-
-            try {
-              const mod = await server.ssrLoadModule(c.path)
-              if (mod && typeof mod.default === 'function') {
-                Object.assign(req.query, c.params)
-                await mod.default(req, res)
-                return
-              }
-            } catch (err: any) {
-              if (
-                err.message?.includes('Cannot find module') ||
-                err.message?.includes('Failed to load url') ||
-                err.message?.includes('Does the file exist') ||
-                err.code === 'ENOENT'
-              ) {
-                continue
-              }
-              console.error(`Error executing API endpoint ${c.path}:`, err)
-              res.statusCode = 500
-              res.setHeader('Content-Type', 'application/json')
-              res.end(JSON.stringify({ success: false, error: err.message }))
-              return
-            }
+          const mod = await server.ssrLoadModule('./api/index.ts')
+          if (mod && typeof mod.default === 'function') {
+            await mod.default(req, res)
+            return
           }
 
           res.statusCode = 404
           res.setHeader('Content-Type', 'application/json')
           res.end(JSON.stringify({ success: false, error: `API route not found: ${pathOnly}` }))
           return
-        } catch (err) {
-          next(err)
+        } catch (err: any) {
+          console.error(`Error executing API router:`, err)
+          res.statusCode = 500
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify({ success: false, error: err.message }))
+          return
         }
       })
     },
