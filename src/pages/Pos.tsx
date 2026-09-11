@@ -138,7 +138,7 @@ export default function Pos(props: PosProps = {}) {
   const [referenceNumber, setReferenceNumber] = useState('')
   const [tailorName, setTailorName] = useState('')
   const [billingDate, setBillingDate] = useState('') // '' = use current date/time
-  const [paymentType, setPaymentType] = useState<string>('Cash')
+  const [paymentType, setPaymentType] = useState<string>('CASH')
   const [saving, setSaving] = useState(false)
   const [shipping, setShipping] = useState<string>('0')
   const [couponInput, setCouponInput] = useState('')
@@ -195,7 +195,7 @@ export default function Pos(props: PosProps = {}) {
   const [addProductOpen, setAddProductOpen] = useState(false)
   const [depositOpen, setDepositOpen] = useState(false)
   const [depositCreated, setDepositCreated] = useState<AdvanceOrder | null>(null)
-  const [depositForm, setDepositForm] = useState({ amount: '', expectedDeliveryDate: '', paymentMethod: 'Cash' as AdvancePaymentMethod, address: '', remarks: '', referenceNumber: '' })
+  const [depositForm, setDepositForm] = useState({ amount: '', expectedDeliveryDate: '', paymentMethod: 'CASH' as AdvancePaymentMethod, address: '', remarks: '', referenceNumber: '' })
   const [dbCategories, setDbCategories] = useState<string[]>([])
   const [lowStockAlert, setLowStockAlert] = useState<{ name: string; stock: number }[]>([])
   const searchRef = useRef<HTMLInputElement>(null)
@@ -457,7 +457,7 @@ export default function Pos(props: PosProps = {}) {
     if (total <= 0) { setError('The order total must be greater than zero.'); return }
     const enteredAmount = Number(cashReceived) || 0
     const suggestedDeposit = enteredAmount > 0 && enteredAmount < total ? String(enteredAmount) : ''
-    setDepositForm({ amount: suggestedDeposit, expectedDeliveryDate: '', paymentMethod: 'Cash', address: customer.address || '', remarks: '', referenceNumber: '' })
+    setDepositForm({ amount: suggestedDeposit, expectedDeliveryDate: '', paymentMethod: (paymentType || 'CASH') as AdvancePaymentMethod, address: customer.address || '', remarks: '', referenceNumber: '' })
     setError('')
     setDepositOpen(true)
   }
@@ -509,9 +509,10 @@ export default function Pos(props: PosProps = {}) {
     // Validate required phone
     const normalizedPhone = normalizePhone(customer.phone || '')
     if (!normalizedPhone) { setError('Please enter a valid mobile number (e.g. 9080788263 or +91 90807 88263)'); return }
-    // Validate payment amount (only required for cash)
-    if (paymentType === 'Cash' && !cashReceived.trim()) { setError('Enter the amount received from customer'); return }
-    if (paymentType === 'Cash' && cashReceivedNum < total) { setError(`Insufficient payment. Customer still owes ${formatCurrency(total - cashReceivedNum)}`); return }
+    // Validate payment amount (required for cash, validated if entered for other methods)
+    const isCash = paymentType.toUpperCase() === 'CASH'
+    if (isCash && !cashReceived.trim()) { setError('Enter the amount received from customer'); return }
+    if ((isCash || cashReceived.trim()) && cashReceivedNum < total) { setError(`Insufficient payment. Customer still owes ${formatCurrency(total - cashReceivedNum)}`); return }
     // Validate online mode availability
     if (ordermode === 'online' && !navigator.onLine) { setError('Cannot place online orders while offline. Please check your internet connection.'); return }
     setSaving(true); setError('')
@@ -578,7 +579,7 @@ export default function Pos(props: PosProps = {}) {
         customerName: customer.name.trim() || 'Walk-in Customer',
         phone: normalizedPhone,
         address: customer.address.trim() || 'POS Counter',
-        amountReceived: cashReceivedNum,
+        amountReceived: cashReceivedNum > 0 ? cashReceivedNum : (isCash ? 0 : total),
         balanceReturned: balanceToReturn,
         paymentMode: ordermode === 'online' ? 'Online' : paymentType,
         paymentMethod: paymentMode,
@@ -1417,7 +1418,7 @@ export default function Pos(props: PosProps = {}) {
               {/* Payment Mode Selector */}
               <div>
                 <label className="block text-[10px] font-black text-[#374151] tracking-wider uppercase mb-1">Payment Mode</label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                <div className="grid grid-cols-2 gap-1.5">
                   {PAYMENT_METHODS.map(mode => (
                     <button
                       key={mode}
@@ -1435,12 +1436,12 @@ export default function Pos(props: PosProps = {}) {
                 </div>
               </div>
 
-              {/* Amount Received (shown when CASH payment mode is selected) */}
-              {paymentType === 'Cash' && (
+              {/* Amount Received (shown for all four payment methods) */}
+              {['CASH', 'G PAY', 'CARD', 'OTHERS'].includes(paymentType.toUpperCase()) && (
                 <div>
                   <div className="border border-[#A5D6A7]/60 rounded-xl p-2.5 bg-white">
                     <label className="block text-[10px] font-black text-[#374151] tracking-wider uppercase mb-1.5">
-                      CASH — AMOUNT RECEIVED (₹)
+                      AMOUNT RECEIVED (₹)
                     </label>
                     <div className="relative flex items-center">
                       <span className="absolute left-3 text-sm font-black text-[#2E7D32] pointer-events-none">₹</span>
@@ -1535,7 +1536,7 @@ export default function Pos(props: PosProps = {}) {
               <label className="block"><span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-[#6B7280]">Deposit received *</span><input required autoFocus type="number" onWheel={(e) => (e.target as HTMLInputElement).blur()} min="0.01" max={Math.max(0, total - 0.01)} step="0.01" value={depositForm.amount} onChange={e => setDepositForm({...depositForm, amount:e.target.value})} className="w-full rounded-xl border px-3 py-2.5 text-sm font-bold outline-none focus:border-violet-600"/></label>
               <label className="block"><span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-[#6B7280]">Remaining balance</span><div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm font-black text-red-700">{formatCurrency(Math.max(0,total-Number(depositForm.amount||0)))}</div></label>
               <label className="block"><span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-[#6B7280]">Expected delivery *</span><input required type="date" value={depositForm.expectedDeliveryDate} onChange={e => setDepositForm({...depositForm, expectedDeliveryDate:e.target.value})} className="w-full rounded-xl border px-3 py-2.5 text-sm font-bold outline-none focus:border-violet-600"/></label>
-              <label className="block"><span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-[#6B7280]">Payment method *</span><select value={depositForm.paymentMethod} onChange={e => setDepositForm({...depositForm,paymentMethod:e.target.value as AdvancePaymentMethod})} className="w-full rounded-xl border px-3 py-2.5 text-sm font-bold outline-none focus:border-violet-600"><option value="Cash">Cash</option><option value="Credit Card">Credit Card</option><option value="Debit Card">Debit Card</option><option value="Membership">Membership</option><option value="e-Wallet">e-Wallet</option><option value="QR Payment">QR Payment</option><option value="Ali Pay">Ali Pay</option><option value="WeChat Pay">WeChat Pay</option><option value="Shopee Pay">Shopee Pay</option><option value="Others">Others</option></select></label>
+              <label className="block"><span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-[#6B7280]">Payment method *</span><select value={depositForm.paymentMethod} onChange={e => setDepositForm({...depositForm,paymentMethod:e.target.value as AdvancePaymentMethod})} className="w-full rounded-xl border px-3 py-2.5 text-sm font-bold outline-none focus:border-violet-600">{PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}</select></label>
               <label className="block sm:col-span-2"><span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-[#6B7280]">Delivery address</span><textarea value={depositForm.address} onChange={e => setDepositForm({...depositForm,address:e.target.value})} className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:border-violet-600" rows={2}/></label>
               <label className="block sm:col-span-2"><span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-[#6B7280]">Reference Number</span><input value={depositForm.referenceNumber} onChange={e => setDepositForm({...depositForm,referenceNumber:e.target.value})} className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:border-violet-600" placeholder="e.g. PO-001, booking ref (optional)"/></label>
               <label className="block sm:col-span-2"><span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-[#6B7280]">Remarks</span><textarea value={depositForm.remarks} onChange={e => setDepositForm({...depositForm,remarks:e.target.value})} className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:border-violet-600" rows={2}/></label>

@@ -150,7 +150,7 @@
 @media print {
   @page {
     size: A4 portrait;
-    margin: 12mm 12mm 12mm 12mm;
+    margin: 8mm 10mm 8mm 10mm;
   }
 
   html, body, #root {
@@ -170,7 +170,7 @@
   nav,
   footer { display: none !important; }
 
-  /* Invoice fills full page width */
+  /* Invoice fills full page width without breaking onto page 2 */
   #invoice-print-root {
     width: 100% !important;
     max-width: 100% !important;
@@ -180,6 +180,17 @@
     border: none !important;
     border-radius: 0 !important;
     min-height: 0 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Prevent awkward page breaks across table, totals and footer */
+  #invoice-print-root table,
+  #invoice-print-root tbody,
+  #invoice-print-root tr,
+  #invoice-print-root > div {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 
   /* Preserve background colors (green header, badges) */

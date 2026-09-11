@@ -32,7 +32,7 @@ const STATUS_STYLES: Record<AdvanceStatus, string> = {
   pending_deposit: 'bg-amber-50 text-amber-700 border-amber-200', ready_for_delivery: 'bg-blue-50 text-blue-700 border-blue-200',
   waiting_final_payment: 'bg-violet-50 text-violet-700 border-violet-200', completed: 'bg-emerald-50 text-emerald-700 border-emerald-200', cancelled: 'bg-red-50 text-red-700 border-red-200',
 }
-const initialForm = { customerName: '', phone: '', address: '', productName: '', category: '', description: '', totalAmount: '', depositAmount: '', expectedDeliveryDate: '', status: 'pending_deposit' as AdvanceStatus, remarks: '', reference_number: '', paymentMethod: 'cash' as AdvancePaymentMethod }
+const initialForm = { customerName: '', phone: '', address: '', productName: '', category: '', description: '', totalAmount: '', depositAmount: '', expectedDeliveryDate: '', status: 'pending_deposit' as AdvanceStatus, remarks: '', reference_number: '', paymentMethod: 'CASH' as AdvancePaymentMethod }
 const dateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 
 type AdvanceOrdersProps = {
@@ -59,7 +59,7 @@ export default function AdvanceOrders({ onOrderCompleted }: AdvanceOrdersProps =
   const [timeline, setTimeline] = useState<AdvanceTimeline[]>([])
   const [payments, setPayments] = useState<AdvancePayment[]>([])
   const [paymentOrder, setPaymentOrder] = useState<AdvanceOrder | null>(null)
-  const [paymentForm, setPaymentForm] = useState({ method: 'cash' as AdvancePaymentMethod, remarks: '' })
+  const [paymentForm, setPaymentForm] = useState({ method: 'CASH' as AdvancePaymentMethod, remarks: '' })
   const [couponInput, setCouponInput] = useState('')
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; percentage: number } | null>(null)
   const [couponError, setCouponError] = useState('')

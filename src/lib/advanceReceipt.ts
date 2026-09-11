@@ -20,10 +20,16 @@ export function advanceReceiptPdf(order: AdvanceOrder) {
   doc.setTextColor('#1B5E20'); doc.setFontSize(10); doc.text(BRAND_OWNER, 44, 24)
   doc.setTextColor('#6b7280'); doc.setFontSize(8); doc.text('ADVANCE RECEIPT - NOT A TAX INVOICE', 44, 30)
 
-  doc.setFont('helvetica', 'normal'); doc.text(BRAND_ADDRESS, 194, 18, { align: 'right', maxWidth: 80 }); doc.text(`Ph: ${BRAND_PHONE_DISPLAY} | ${BRAND_EMAIL}`, 194, 30, { align: 'right' })
-  doc.setDrawColor('#2E7D32'); doc.line(16, 40, 194, 40)
-  doc.setTextColor('#111827'); doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.text(order.deposit_id, 16, 51)
-  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor('#6b7280'); doc.text(`Created: ${new Date(order.created_at).toLocaleString('en-IN')}`, 194, 51, { align: 'right' })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  doc.setTextColor('#4b5563')
+  doc.text(BRAND_ADDRESS, 194, 17, { align: 'right', maxWidth: 75 })
+  doc.text(`Phone: ${BRAND_PHONE_DISPLAY}`, 194, 26.5, { align: 'right' })
+  doc.text(`Email: ${BRAND_EMAIL}`, 194, 31, { align: 'right' })
+  doc.setDrawColor('#2E7D32')
+  doc.line(16, 38, 194, 38)
+  doc.setTextColor('#111827'); doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.text(order.deposit_id, 16, 49)
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor('#6b7280'); doc.text(`Created: ${new Date(order.created_at).toLocaleString('en-IN')}`, 194, 49, { align: 'right' })
   const rows = [
     ['Customer', order.customer_name], ['Phone', order.phone], ['Address', order.address || '-'], ['Product', order.product_name],
     ['Category', order.category || '-'], ['Expected delivery', new Date(`${order.expected_delivery_date}T00:00:00`).toLocaleDateString('en-IN')],
@@ -81,7 +87,7 @@ export function printAdvanceReceipt(order: AdvanceOrder) {
 <div class="c big">${esc(BRAND_EN)}</div>
 <div class="c bold" style="font-size:11px;color:#1B5E20;margin-top:2px;">${esc(BRAND_OWNER)}</div>
 <div class="c" style="font-size:10px;color:#555;">${esc(BRAND_ADDRESS)}</div>
-<div class="c" style="font-size:10px;color:#555;">Ph: ${esc(BRAND_PHONE_DISPLAY)}</div>
+<div class="c" style="font-size:10px;color:#555;">Phone: ${esc(BRAND_PHONE_DISPLAY)}</div>
 <div class="c" style="font-size:10px;color:#555;">Email: ${esc(BRAND_EMAIL)}</div>
 <div class="line"></div>
 <div class="c big">ADVANCE RECEIPT</div>

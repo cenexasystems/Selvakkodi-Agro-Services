@@ -21,7 +21,10 @@ export type InvoicePdfData = {
   paymentMode?: string
 }
 
-const money = (value: number) => formatCurrency(Number(value || 0)).replace(/\s+/g, ' ')
+const money = (value: number) => {
+  const formatted = formatCurrency(Number(value || 0)).replace(/\s+/g, ' ')
+  return formatted.replace(/^INR\s*/, 'Rs. ').replace(/^₹\s*/, 'Rs. ')
+}
 
 /** Creates a compact A4 invoice that can be attached as a file to WhatsApp. */
 export function createInvoicePdf(data: InvoicePdfData): Blob {
@@ -136,7 +139,7 @@ export function createInvoicePdf(data: InvoicePdfData): Blob {
   const rows: Array<[string, string, string]> = [['Subtotal', money(data.subtotal), ink]]
   if ((data.discountAmount || 0) > 0) rows.push([`Coupon${data.couponCode ? ` (${data.couponCode})` : ''}`, `-${money(data.discountAmount || 0)}`, '#2E7D32'])
   if ((data.manualDiscountAmount || 0) > 0) rows.push(['Discount', `-${money(data.manualDiscountAmount || 0)}`, '#2E7D32'])
-  if ((data.gstAmount || 0) > 0) rows.push(['SST', money(data.gstAmount || 0), ink])
+  if ((data.gstAmount || 0) > 0) rows.push(['GST', money(data.gstAmount || 0), ink])
   rows.push(['Delivery', (data.shipping || 0) > 0 ? money(data.shipping) : 'FREE', ink])
   doc.setFontSize(9)
   rows.forEach(([label, value, color]) => { doc.setFont('helvetica', 'normal'); doc.setTextColor(color); doc.text(label, 143, y, { align: 'right' }); doc.text(value, right - 4, y, { align: 'right' }); y += 7 })
@@ -149,14 +152,42 @@ export function createInvoicePdf(data: InvoicePdfData): Blob {
   doc.text('TOTAL', 143, y + 6, { align: 'right' })
   doc.text(money(data.total), right - 4, y + 6, { align: 'right' })
 
-  y = 275
+  y = 271
   doc.setDrawColor('#d8dce0')
   doc.setLineWidth(0.2)
   doc.line(left, y, right, y)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  doc.setTextColor(primaryColor)
-  doc.text('THANK YOU FOR SHOPPING WITH US', pageWidth / 2, y + 8, { align: 'center' })
+
+  if (typeof document !== 'undefined') {
+    try {
+      const footerCanvas = document.createElement('canvas')
+      const scale = 3
+      footerCanvas.width = 180 * scale * 3.78
+      footerCanvas.height = 18 * scale * 3.78
+      const ctx = footerCanvas.getContext('2d')
+      if (ctx) {
+        ctx.scale(scale * 3.78, scale * 3.78)
+        ctx.fillStyle = primaryColor
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.font = 'bold 8.5px Inter, Helvetica, Arial, sans-serif'
+        ctx.fillText('Thank you for choosing Selvakkodi Agro Service', 90, 5)
+        ctx.font = "bold 8px 'Noto Sans Tamil', sans-serif"
+        ctx.fillText('செல்வக்கொடி அக்ரோ சர்வீஸை தேர்ந்தெடுத்ததற்கு நன்றி!', 90, 12)
+        const footerImg = footerCanvas.toDataURL('image/png')
+        doc.addImage(footerImg, 'PNG', (pageWidth - 180) / 2, y + 2, 180, 18, undefined, 'FAST')
+      }
+    } catch {
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8)
+      doc.setTextColor(primaryColor)
+      doc.text('Thank you for choosing Selvakkodi Agro Service', pageWidth / 2, y + 6, { align: 'center' })
+    }
+  } else {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8)
+    doc.setTextColor(primaryColor)
+    doc.text('Thank you for choosing Selvakkodi Agro Service', pageWidth / 2, y + 6, { align: 'center' })
+  }
   return doc.output('blob')
 }
 
@@ -176,8 +207,14 @@ export async function invoicePdfFileFromElement(
     scale: 2,
     useCORS: true,
     logging: false,
-    windowWidth: element.scrollWidth,
-    windowHeight: element.scrollHeight,
+    windowWidth: Math.max(element.scrollWidth, 680),
+    onclone: (clonedDoc) => {
+      const el = clonedDoc.getElementById('invoice-print-root')
+      if (el) {
+        el.style.width = '680px'
+        el.style.maxWidth = '680px'
+      }
+    },
   })
 
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
@@ -186,8 +223,13 @@ export async function invoicePdfFileFromElement(
   const imageHeight = (canvas.height * pageWidth) / canvas.width
   const image = canvas.toDataURL('image/png')
 
-  if (imageHeight <= pageHeight + 10) {
+  if (imageHeight <= pageHeight + 5) {
     doc.addImage(image, 'PNG', 0, 0, pageWidth, Math.min(pageHeight, imageHeight), undefined, 'FAST')
+  } else if (imageHeight <= pageHeight * 1.35) {
+    const scale = pageHeight / imageHeight
+    const fittedWidth = pageWidth * scale
+    const xOffset = (pageWidth - fittedWidth) / 2
+    doc.addImage(image, 'PNG', xOffset, 0, fittedWidth, pageHeight, undefined, 'FAST')
   } else {
     let offset = 0
     let page = 0

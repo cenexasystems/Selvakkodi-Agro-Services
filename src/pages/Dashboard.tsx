@@ -1620,7 +1620,7 @@ export default function Dashboard() {
       {/* Main */}
       <main className="flex-grow flex flex-col overflow-hidden">
         {/* Top Action & Notification Bar */}
-        <header className="h-14 border-b border-borderLight bg-white px-4 sm:px-6 flex items-center justify-between shrink-0 shadow-sm z-20">
+        <header className={`h-14 border-b border-borderLight bg-white px-4 sm:px-6 items-center justify-between shrink-0 shadow-sm z-20 ${tab === 'billing' ? 'hidden' : 'flex'}`}>
           <div className="flex items-center gap-3">
             <span className="text-xs font-black uppercase tracking-wider text-[#2E7D32] bg-[#E8F5E9] px-2.5 py-1 rounded-full border border-[#C8E6C9]">
               {role === 'admin' ? 'Admin Portal' : 'Staff Portal'}

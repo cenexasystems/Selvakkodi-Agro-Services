@@ -896,24 +896,6 @@ export default function Inventory() {
                 </div>
               </div>
 
-              {/* Item Type Toggle */}
-              <div className="space-y-2">
-                <label className="text-[11px] font-black uppercase tracking-wider text-[#6B7280]">Type</label>
-                <div className="flex gap-2">
-                  <button type="button"
-                    onClick={() => setProductForm(f => ({ ...f, item_type: 'product' }))}
-                    className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-all ${productForm.item_type === 'product' ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-[#374151] border-[#A5D6A7]/60 hover:border-blue-300'}`}>
-                    📦 Product
-                  </button>
-                  <button type="button"
-                    onClick={() => setProductForm(f => ({ ...f, item_type: 'service' }))}
-                    className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-all ${productForm.item_type === 'service' ? 'bg-purple-500 text-white border-purple-500' : 'bg-white text-[#374151] border-[#A5D6A7]/60 hover:border-purple-300'}`}>
-                    ✂️ Service
-                  </button>
-                </div>
-                <p className="text-[10px] text-[#9CA3AF]">Products = physical items sold. Services = repairs, consultations, servicing.</p>
-              </div>
-
               <div className="flex items-center gap-3 p-3 bg-[#FAFAFA] rounded-xl border border-[#A5D6A7]/60">
                 <label className="flex items-center gap-2 cursor-pointer select-none text-sm font-bold text-[#374151]">
                   <input type="checkbox" checked={productForm.is_active} onChange={e => setProductForm(f => ({...f, is_active: e.target.checked}))}
