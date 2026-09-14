@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { Users, Calendar, AlertTriangle, Plus, X, Edit2, LogIn, LogOut } from 'lucide-react'
+import { Users, Calendar, AlertTriangle, Plus, X, Edit2, Trash2, LogIn, LogOut } from 'lucide-react'
 import { formatCurrency } from '../lib/retail'
 import { staffService, type Staff } from '../services/staffService'
 import { attendanceService, type AttendanceRecord } from '../services/attendanceService'
@@ -137,6 +137,16 @@ export default function Attendance() {
     void fetchData()
   }
 
+  const handleDeleteStaff = async (member: Staff) => {
+    if (!window.confirm(`Are you sure you want to remove "${member.name}" from staff?`)) return
+    const res = await staffService.deleteStaff(member.id)
+    if (res.error) {
+      alert(res.error)
+    } else {
+      void fetchData()
+    }
+  }
+
 
   const activeStaff = staff.filter(s => s.is_active)
   const presentCount = activeStaff.filter(s => attendanceMap[s.id] === 'present').length
@@ -192,11 +202,11 @@ export default function Attendance() {
               <table className="w-full text-left">
                 <thead className="bg-[#FAFAFA] border-b border-[#A5D6A7]/60">
                   <tr>
-                    <th className="px-4 py-3 text-[11px] font-black uppercase text-[#374151]">Staff Member</th>
-                    <th className="px-4 py-3 text-[11px] font-black uppercase text-[#374151]">Role</th>
-                    <th className="px-4 py-3 text-[11px] font-black uppercase text-green-700">Clock In</th>
-                    <th className="px-4 py-3 text-[11px] font-black uppercase text-red-600">Clock Out</th>
-                    <th className="px-4 py-3 text-[11px] font-black uppercase text-[#374151]">Override Status</th>
+                    <th className="px-4 py-3 text-[11px] font-black uppercase text-[#374151] min-w-[150px]">Staff Member</th>
+                    <th className="px-4 py-3 text-[11px] font-black uppercase text-[#374151] min-w-[110px]">Role</th>
+                    <th className="px-4 py-3 text-[11px] font-black uppercase text-green-700 min-w-[90px]">Clock In</th>
+                    <th className="px-4 py-3 text-[11px] font-black uppercase text-red-600 min-w-[90px]">Clock Out</th>
+                    <th className="px-4 py-3 text-[11px] font-black uppercase text-[#374151] min-w-[230px]">Override Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -231,7 +241,7 @@ export default function Attendance() {
                           ) : <span className="text-[#9BAB9A] text-xs">—</span>}
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex gap-1.5 flex-wrap">
+                          <div className="grid grid-cols-2 gap-1">
                             {['present', 'absent', 'half-day', 'leave'].map(s => {
                               const isSelected = status === s
                               let colorClass = 'bg-gray-50 text-[#6B7280] border-gray-200 hover:bg-gray-100'
@@ -242,7 +252,7 @@ export default function Attendance() {
                               }
                               return (
                                 <button key={s} onClick={() => void markAttendance(member.id, s)} disabled={dbError}
-                                  className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-50 ${colorClass}`}>
+                                  className={`px-2 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-50 ${colorClass}`}>
                                   {s.replace('-', ' ')}
                                 </button>
                               )
@@ -296,11 +306,19 @@ export default function Attendance() {
                           {member.is_active ? 'Active' : 'Inactive'}
                         </button>
                       </td>
-                      <td className="px-4 py-3 text-right">
-                        <button onClick={() => { setEditingStaff(member); setForm({ name: member.name, role: member.role, phone: member.phone || '', base_salary: String(member.base_salary) }); setShowModal(true) }}
-                          className="text-[#374151] hover:text-[#2E7D32] p-1.5 bg-gray-50 hover:bg-[#FFF8F2] rounded-lg border border-transparent hover:border-[#A5D6A7] transition-colors">
-                          <Edit2 size={14} />
-                        </button>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-2">
+                          <button onClick={() => { setEditingStaff(member); setForm({ name: member.name, role: member.role, phone: member.phone || '', base_salary: String(member.base_salary) }); setShowModal(true) }}
+                            className="text-[#374151] hover:text-[#2E7D32] p-1.5 bg-gray-50 hover:bg-[#FFF8F2] rounded-lg border border-transparent hover:border-[#A5D6A7] transition-colors"
+                            title="Edit staff member">
+                            <Edit2 size={14} />
+                          </button>
+                          <button onClick={() => void handleDeleteStaff(member)}
+                            className="text-red-500 hover:text-red-700 p-1.5 bg-gray-50 hover:bg-red-50 rounded-lg border border-transparent hover:border-red-200 transition-colors"
+                            title="Delete staff member">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

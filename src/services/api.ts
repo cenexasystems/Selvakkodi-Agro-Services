@@ -408,6 +408,8 @@ export const api = {
     new_quantity: number
     adjustment: number
     reason: string
+    adjustment_type?: string | null
+    note?: string | null
     reference_id?: string | null
   }) =>
     request<ApiInventoryLog>('/inventory/logs', {

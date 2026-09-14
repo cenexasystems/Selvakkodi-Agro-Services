@@ -39,6 +39,11 @@ export function printThermalReceipt(data: ThermalReceiptData) {
   if (!doc) return
 
 
+  const formatPhoneDisplay = (ph: string) => {
+    const d = ph.replace(/\D/g, '')
+    return d.length === 12 && d.startsWith('91') ? `${d.slice(0, 2)} ${d.slice(2)}` : ph
+  }
+
   const dateStr = (() => {
     try {
       const d = new Date(data.date)
@@ -97,7 +102,7 @@ export function printThermalReceipt(data: ThermalReceiptData) {
           <div>Inv: #${formatInvoiceNo(data.invoiceNo)}</div>
           <div>Date: ${dateStr}</div>
           ${data.customerName ? `<div>Name: ${data.customerName}</div>` : ''}
-          ${data.phone ? `<div>Tel: ${data.phone}</div>` : ''}
+          ${data.phone ? `<div>Tel: ${formatPhoneDisplay(data.phone)}</div>` : ''}
         </div>
 
         <table class="border-bottom">

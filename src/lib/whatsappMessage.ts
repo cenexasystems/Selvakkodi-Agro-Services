@@ -110,15 +110,29 @@ export const buildAdvanceDepositWhatsAppMessage = (input: AdvanceDepositWhatsApp
   const customerName = input.customerName?.trim() || 'Valued Customer'
   const deliveryDateFormatted = input.expectedDeliveryDate
     ? (() => {
-        try {
-          return new Date(`${input.expectedDeliveryDate}T00:00:00`).toLocaleDateString('en-IN', {
+        const raw = String(input.expectedDeliveryDate).trim()
+        if (!raw) return '-'
+        const ymdMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/)
+        if (ymdMatch) {
+          const [, y, m, d] = ymdMatch
+          const dObj = new Date(Number(y), Number(m) - 1, Number(d))
+          if (!isNaN(dObj.getTime())) {
+            return dObj.toLocaleDateString('en-IN', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+            })
+          }
+        }
+        const parsed = new Date(raw)
+        if (!isNaN(parsed.getTime())) {
+          return parsed.toLocaleDateString('en-IN', {
             day: '2-digit',
             month: 'short',
             year: 'numeric',
           })
-        } catch {
-          return input.expectedDeliveryDate
         }
+        return raw
       })()
     : '-'
 

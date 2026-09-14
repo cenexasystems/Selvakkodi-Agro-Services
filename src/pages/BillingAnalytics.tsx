@@ -137,6 +137,28 @@ const parseOrderItems = (items: unknown): Record<string, unknown>[] => {
   return []
 }
 
+const formatPhoneForCSV = (phone: any): string => {
+  if (!phone) return ''
+  const clean = String(phone).trim()
+  if (!clean) return ''
+  return `="${clean.replace(/"/g, '')}"`
+}
+
+const formatDateForCSV = (dateInput: any): string => {
+  if (!dateInput) return ''
+  const str = String(dateInput).trim()
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (match) {
+    return `${match[3]}/${match[2]}/${match[1]}`
+  }
+  const d = new Date(dateInput)
+  if (isNaN(d.getTime())) return str
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const year = d.getFullYear()
+  return `${day}/${month}/${year}`
+}
+
 const exportCSV = (orders: BillingOrder[]) => {
   const header = ['Invoice No', 'Customer', 'Phone', 'Bill Type', 'Coupon', 'Discount', 'Delivery', 'Total', 'Date', 'Status']
   const rows = orders.map((order) => {
@@ -148,19 +170,23 @@ const exportCSV = (orders: BillingOrder[]) => {
     return [
       order.invoice_no || '—',
       order.customer_name,
-      order.phone,
+      formatPhoneForCSV(order.phone),
       billType,
       order.coupon_code || '',
       toNumber(order.discount_amount, 0).toFixed(2),
       toNumber(order.delivery_charge, 0).toFixed(2),
       toNumber(order.total, 0).toFixed(2),
-      new Date(order.created_at).toLocaleDateString('en-IN'),
+      formatDateForCSV(order.created_at),
       order.status,
     ]
   })
 
   const csv = [header, ...rows]
-    .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(','))
+    .map((row) => row.map((value) => {
+      const s = String(value ?? '')
+      if (s.startsWith('="') && s.endsWith('"')) return s
+      return `"${s.replace(/"/g, '""')}"`
+    }).join(','))
     .join('\n')
 
   const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })

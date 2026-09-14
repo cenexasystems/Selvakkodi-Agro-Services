@@ -6,6 +6,9 @@ import { requireRole } from '../_lib/auth.js';
 const VALID_REASONS = ['sale', 'restock', 'return', 'manual_adjustment', 'loss'] as const;
 type InventoryReason = typeof VALID_REASONS[number];
 
+const VALID_ADJUSTMENT_TYPES = ['restock', 'customer_return', 'loss_damaged', 'reconciliation'] as const;
+type AdjustmentType = typeof VALID_ADJUSTMENT_TYPES[number];
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!ensureMethod(req, res, ['GET', 'POST'])) return;
 
@@ -41,6 +44,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           l.new_quantity::float AS new_quantity,
           l.adjustment::float AS adjustment,
           l.reason,
+          l.adjustment_type,
+          l.note,
           l.reference_id,
           l.created_by,
           l.created_at,
@@ -113,6 +118,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return errorResponse(res, `Invalid reason "${b.reason}". Allowed: ${VALID_REASONS.join(', ')}`, 400);
       }
 
+      // New typed adjustment_type field (optional, for structured reporting)
+      const rawAdjType = b.adjustment_type !== undefined ? String(b.adjustment_type).trim().toLowerCase() : null;
+      const adjustmentType: AdjustmentType | null = rawAdjType && VALID_ADJUSTMENT_TYPES.includes(rawAdjType as AdjustmentType)
+        ? (rawAdjType as AdjustmentType)
+        : null;
+
+      // Dedicated note field (separate from reference_id)
+      const noteText = b.note !== undefined && b.note !== null && String(b.note).trim() !== ''
+        ? String(b.note).trim().slice(0, 500)
+        : null;
+
       const referenceId = b.reference_id !== undefined && b.reference_id !== null && b.reference_id !== ''
         ? String(b.reference_id).trim().slice(0, 255)
         : (b.referenceId !== undefined && b.referenceId !== null && b.referenceId !== '' ? String(b.referenceId).trim().slice(0, 255) : null);
@@ -124,6 +140,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           new_quantity,
           adjustment,
           reason,
+          adjustment_type,
+          note,
           reference_id,
           created_by
         ) VALUES (
@@ -132,6 +150,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ${newQty},
           ${rawAdjustment},
           ${reason},
+          ${adjustmentType},
+          ${noteText},
           ${referenceId},
           ${user.id}
         )
@@ -142,6 +162,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           new_quantity::float AS new_quantity,
           adjustment::float AS adjustment,
           reason,
+          adjustment_type,
+          note,
           reference_id,
           created_by,
           created_at

@@ -1350,37 +1350,40 @@ export default function Pos(props: PosProps = {}) {
               {/* GST Toggle */}
               <div className="flex items-center justify-between py-1 border-b border-[#A5D6A7]/40">
                 <span className="text-[11px] font-black text-[#374151]">Enable GST on Bill</span>
-                <button
-                  type="button"
-                  onClick={() => setBillGstEnabled(!billGstEnabled)}
-                  className={`w-9 h-5 rounded-full p-0.5 transition-colors ${billGstEnabled ? 'bg-[#2E7D32]' : 'bg-[#A5D6A7]/60'}`}
-                >
-                  <div className={`w-4 h-4 rounded-full bg-white transition-transform ${billGstEnabled ? 'translate-x-4' : 'translate-x-0'}`}></div>
-                </button>
+                <div className="flex items-center gap-2">
+                  {billGstEnabled && (
+                    <>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                        value={gstInput}
+                        onChange={e => { setGstInput(e.target.value); setGstType('percent') }}
+                        className="w-14 h-6 px-1.5 bg-white border border-[#A5D6A7]/60 rounded-lg text-[11px] font-black text-[#111111] text-center focus:outline-none focus:border-[#2E7D32]"
+                        placeholder="18"
+                      />
+                      <span className="text-[11px] font-black text-[#374151]">%</span>
+                      <span className="text-[12px] font-black text-[#B91C1C]">{formatCurrency(totalGst)}</span>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextEnabled = !billGstEnabled
+                      setBillGstEnabled(nextEnabled)
+                      if (nextEnabled && !gstInput) {
+                        setGstInput('18')
+                        setGstType('percent')
+                      }
+                    }}
+                    className={`w-9 h-5 rounded-full p-0.5 transition-colors ${billGstEnabled ? 'bg-[#2E7D32]' : 'bg-[#A5D6A7]/60'}`}
+                  >
+                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${billGstEnabled ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                  </button>
+                </div>
               </div>
 
-              {billGstEnabled && (
-                <div className="flex gap-2">
-                  <div className="relative shrink-0">
-                    <select
-                      value={gstType}
-                      onChange={e => setGstType(e.target.value as 'flat'|'percent')}
-                      className="appearance-none h-9 bg-white border border-[#A5D6A7]/60 rounded-xl pl-2 pr-7 text-[12px] font-black text-[#111111] focus:outline-none focus:border-[#2E7D32]"
-                    >
-                      <option value="percent">%</option>
-                      <option value="flat">₹</option>
-                    </select>
-                    <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#374151] pointer-events-none" />
-                  </div>
-                  <input
-                    type="number" onWheel={(e) => (e.target as HTMLInputElement).blur()}
-                    value={gstInput}
-                    onChange={e => setGstInput(e.target.value)}
-                    placeholder={gstType === 'percent' ? "e.g. 6" : "0"}
-                    className="w-full h-9 px-3 bg-white border border-[#A5D6A7]/60 rounded-xl text-[12px] font-black text-[#111111] text-right focus:outline-none focus:border-[#2E7D32]"
-                  />
-                </div>
-              )}
 
               {/* Summary calculations */}
               <div className="bg-[#FAFAF8] rounded-xl border border-[#A5D6A7]/40 p-2.5 space-y-1.5">
@@ -1441,7 +1444,7 @@ export default function Pos(props: PosProps = {}) {
                 <div>
                   <div className="border border-[#A5D6A7]/60 rounded-xl p-2.5 bg-white">
                     <label className="block text-[10px] font-black text-[#374151] tracking-wider uppercase mb-1.5">
-                      AMOUNT RECEIVED (₹)
+                      {paymentType.replace(/\s+/g, '')} — AMOUNT RECEIVED (₹)
                     </label>
                     <div className="relative flex items-center">
                       <span className="absolute left-3 text-sm font-black text-[#2E7D32] pointer-events-none">₹</span>

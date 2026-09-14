@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { sql } from '../api/_lib/db.js';
+import { sql } from '../api/_routes/_lib/db.js';
 
 // We test the InventoryAlertService transition engine logic
 class MockInventoryAlertEngine {
@@ -8,6 +8,10 @@ class MockInventoryAlertEngine {
   private isBaselineInitialized = false;
   public soundPlayCount = 0;
   private soundDebounceTimer: any = null;
+
+  public getSoundPlayCount(): number {
+    return this.soundPlayCount;
+  }
 
   public classify(stock: number, limit: number): 'OUT_OF_STOCK' | 'LOW_STOCK' | 'NORMAL' {
     if (stock <= 0) return 'OUT_OF_STOCK';
@@ -118,10 +122,10 @@ async function runTests() {
   engine.checkProducts(initialProducts, 5);
   await new Promise(r => setTimeout(r, 100));
 
-  if (engine.soundPlayCount === 0) {
+  if (engine.getSoundPlayCount() === 0) {
     console.log('✅ Scenario 1 Passed: Initial load produced ZERO sounds.');
   } else {
-    throw new Error(`Scenario 1 Failed: Initial load triggered ${engine.soundPlayCount} sounds!`);
+    throw new Error(`Scenario 1 Failed: Initial load triggered ${engine.getSoundPlayCount()} sounds!`);
   }
 
   // Scenario 2: Transition 10 -> 4 (NORMAL -> LOW_STOCK)
@@ -133,15 +137,15 @@ async function runTests() {
     throw new Error('Scenario 2 Failed: Did not detect transitionedToLow');
   }
   await new Promise(r => setTimeout(r, 100));
-  if (engine.soundPlayCount === 1) {
+  if (engine.getSoundPlayCount() === 1) {
     console.log('✅ Scenario 2 Passed: Sound played exactly 1 time.');
   } else {
-    throw new Error(`Scenario 2 Failed: Sound count is ${engine.soundPlayCount}, expected 1`);
+    throw new Error(`Scenario 2 Failed: Sound count is ${engine.getSoundPlayCount()}, expected 1`);
   }
 
   // Scenario 3: LOW_STOCK -> LOW_STOCK (4 -> 3)
   console.log('\n--- Scenario 3: LOW_STOCK -> LOW_STOCK (4 -> 3) ---');
-  const prevSounds = engine.soundPlayCount;
+  const prevSounds = engine.getSoundPlayCount();
   const res3 = engine.recordStockChange('p1', 4, 3, 5, 'Neem Oil 1L');
   if (!res3.transitionedToLow && res3.oldState === 'LOW_STOCK' && res3.newState === 'LOW_STOCK') {
     console.log('✅ Correctly recognized state remained LOW_STOCK');
@@ -149,7 +153,7 @@ async function runTests() {
     throw new Error('Scenario 3 Failed: Invalid transition state');
   }
   await new Promise(r => setTimeout(r, 100));
-  if (engine.soundPlayCount === prevSounds) {
+  if (engine.getSoundPlayCount() === prevSounds) {
     console.log('✅ Scenario 3 Passed: 4 -> 3 did NOT re-trigger alert sound.');
   } else {
     throw new Error(`Scenario 3 Failed: Sound triggered when stock was already low!`);
@@ -160,7 +164,7 @@ async function runTests() {
   const refreshEngine = new MockInventoryAlertEngine();
   refreshEngine.checkProducts([{ id: 'p1', name: 'Neem Oil 1L', stock_quantity: 3, low_stock_alert: 5 }], 5);
   await new Promise(r => setTimeout(r, 100));
-  if (refreshEngine.soundPlayCount === 0) {
+  if (refreshEngine.getSoundPlayCount() === 0) {
     console.log('✅ Scenario 4 Passed: Page refresh / re-mount with low stock produces ZERO sound.');
   } else {
     throw new Error('Scenario 4 Failed: Sound played on page refresh!');
@@ -177,27 +181,27 @@ async function runTests() {
 
   // Scenario 6: Subsequent Drop (20 -> 5)
   console.log('\n--- Scenario 6: Subsequent Drop After Restock (20 -> 5) ---');
-  const countBeforeDrop = engine.soundPlayCount;
+  const countBeforeDrop = engine.getSoundPlayCount();
   const res6 = engine.recordStockChange('p1', 20, 5, 5, 'Neem Oil 1L');
   if (res6.transitionedToLow) {
     console.log('✅ Detected new transition to low stock after restock');
   }
   await new Promise(r => setTimeout(r, 100));
-  if (engine.soundPlayCount === countBeforeDrop + 1) {
+  if (engine.getSoundPlayCount() === countBeforeDrop + 1) {
     console.log('✅ Scenario 6 Passed: Sound triggered exactly ONCE for new drop.');
   } else {
-    throw new Error(`Scenario 6 Failed: Sound count expected ${countBeforeDrop + 1}, got ${engine.soundPlayCount}`);
+    throw new Error(`Scenario 6 Failed: Sound count expected ${countBeforeDrop + 1}, got ${engine.getSoundPlayCount()}`);
   }
 
   // Scenario 7: Out of Stock (5 -> 0)
   console.log('\n--- Scenario 7: Out of Stock (5 -> 0) ---');
-  const countBeforeZero = engine.soundPlayCount;
+  const countBeforeZero = engine.getSoundPlayCount();
   const res7 = engine.recordStockChange('p1', 5, 0, 5, 'Neem Oil 1L');
   if (res7.newState === 'OUT_OF_STOCK') {
     console.log('✅ Correctly identified OUT_OF_STOCK state');
   }
   await new Promise(r => setTimeout(r, 100));
-  if (engine.soundPlayCount === countBeforeZero) {
+  if (engine.getSoundPlayCount() === countBeforeZero) {
     console.log('✅ Scenario 7 Passed: Out of stock does not loop audio.');
   } else {
     throw new Error('Scenario 7 Failed: Extra sound played on OUT_OF_STOCK');
@@ -219,10 +223,10 @@ async function runTests() {
   debounceEngine.recordStockChange('m3', 30, 4, 5, 'Item C');
 
   await new Promise(r => setTimeout(r, 150));
-  if (debounceEngine.soundPlayCount === 1) {
+  if (debounceEngine.getSoundPlayCount() === 1) {
     console.log('✅ Scenario 8 Passed: 3 simultaneous drops debounced into exactly 1 sound.');
   } else {
-    throw new Error(`Scenario 8 Failed: Expected 1 debounced sound, got ${debounceEngine.soundPlayCount}`);
+    throw new Error(`Scenario 8 Failed: Expected 1 debounced sound, got ${debounceEngine.getSoundPlayCount()}`);
   }
 
   // Scenario 9: Live Neon DB Store Settings Verification

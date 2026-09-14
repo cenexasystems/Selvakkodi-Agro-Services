@@ -27,11 +27,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       let orders;
       if (isUuid) {
-        orders = await sql`SELECT * FROM public.advance_orders WHERE id = ${idParam}::uuid LIMIT 1`;
+        orders = await sql`SELECT *, expected_delivery_date::text as expected_delivery_date FROM public.advance_orders WHERE id = ${idParam}::uuid LIMIT 1`;
       } else {
         orders = await sql`
-          SELECT * FROM public.advance_orders 
-          WHERE deposit_id = ${idParam} 
+          SELECT *, expected_delivery_date::text as expected_delivery_date FROM public.advance_orders
+          WHERE deposit_id = ${idParam}
              OR deposit_id ILIKE ${'%' + idParam}
           LIMIT 1
         `;
@@ -98,7 +98,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         WHERE id = ${targetId}::uuid
       `;
 
-      const updated = await sql`SELECT * FROM public.advance_orders WHERE id = ${targetId}::uuid LIMIT 1`;
+      const updated = await sql`SELECT *, expected_delivery_date::text as expected_delivery_date FROM public.advance_orders WHERE id = ${targetId}::uuid LIMIT 1`;
       return successResponse(res, updated[0], 200, 'Advance order updated successfully.');
     } catch (err: any) {
       console.error('Error updating advance order:', err);

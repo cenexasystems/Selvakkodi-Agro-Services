@@ -1188,3 +1188,12 @@ CREATE TRIGGER trigger_order_inventory_deduction
 -- Product and category catalog starts empty for SELVAKKODI AGRO SERVICES.
 -- Categories and products are created dynamically through the Admin UI.
 
+-- ============================================================================
+-- 26. INVENTORY LOGS — ADJUSTMENT TYPE & NOTE COLUMNS (migration)
+-- ============================================================================
+-- Adds structured adjustment_type enum and a dedicated note field to the
+-- inventory_logs table. Both columns are nullable so existing rows are unaffected.
+ALTER TABLE public.inventory_logs
+  ADD COLUMN IF NOT EXISTS adjustment_type TEXT
+    CHECK (adjustment_type IN ('restock', 'customer_return', 'loss_damaged', 'reconciliation')),
+  ADD COLUMN IF NOT EXISTS note TEXT;

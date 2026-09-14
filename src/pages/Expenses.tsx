@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { Receipt, Plus, Trash2, X, AlertTriangle, Download } from 'lucide-react'
+import { Receipt, Plus, Trash2, Edit2, X, AlertTriangle, Download } from 'lucide-react'
 import { formatCurrency } from '../lib/retail'
 import { expenseService, type Expense, type ExpenseCategory } from '../services/expenseService'
 
@@ -9,6 +9,7 @@ export default function Expenses() {
   const [categories, setCategories] = useState<ExpenseCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null)
   const [form, setForm] = useState({ category_id: '', amount: '', description: '', expense_date: new Date().toISOString().split('T')[0] })
   const [submitting, setSubmitting] = useState(false)
   const [newCatName, setNewCatName] = useState('')
@@ -49,24 +50,53 @@ export default function Expenses() {
 
   useEffect(() => { void fetchData() }, [fetchData])
 
+  const handleEditExpense = (exp: Expense) => {
+    setEditingExpenseId(exp.id)
+    const rawDate = exp.expense_date ? String(exp.expense_date).split('T')[0] : new Date().toISOString().split('T')[0]
+    setForm({
+      category_id: String(exp.category_id),
+      amount: String(exp.amount),
+      description: exp.description || '',
+      expense_date: rawDate
+    })
+    setShowModal(true)
+  }
+
   const handleSaveExpense = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.category_id || !form.amount) return
     setSubmitting(true)
     
     try {
-      const res = await expenseService.createExpense({
-        category_id: parseInt(form.category_id, 10),
-        amount: parseFloat(form.amount),
-        description: form.description || null,
-        expense_date: form.expense_date
-      })
-      if (res.error) {
-        alert(res.error)
+      if (editingExpenseId) {
+        const res = await expenseService.updateExpense(editingExpenseId, {
+          category_id: parseInt(form.category_id, 10),
+          amount: parseFloat(form.amount),
+          description: form.description || null,
+          expense_date: form.expense_date
+        })
+        if (res.error) {
+          alert(res.error)
+        } else {
+          setShowModal(false)
+          setEditingExpenseId(null)
+          setForm({ category_id: '', amount: '', description: '', expense_date: new Date().toISOString().split('T')[0] })
+          void fetchData()
+        }
       } else {
-        setShowModal(false)
-        setForm({ category_id: '', amount: '', description: '', expense_date: new Date().toISOString().split('T')[0] })
-        void fetchData()
+        const res = await expenseService.createExpense({
+          category_id: parseInt(form.category_id, 10),
+          amount: parseFloat(form.amount),
+          description: form.description || null,
+          expense_date: form.expense_date
+        })
+        if (res.error) {
+          alert(res.error)
+        } else {
+          setShowModal(false)
+          setForm({ category_id: '', amount: '', description: '', expense_date: new Date().toISOString().split('T')[0] })
+          void fetchData()
+        }
       }
     } catch (err: any) {
       console.error(err)
@@ -111,22 +141,64 @@ export default function Expenses() {
     void fetchData()
   }
 
+  const formatDateForCSV = (dateInput: any): string => {
+    if (!dateInput) return ''
+    const str = String(dateInput).trim()
+    const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (match) {
+      return `${match[3]}/${match[2]}/${match[1]}`
+    }
+    const d = new Date(dateInput)
+    if (isNaN(d.getTime())) return str
+    const day = String(d.getDate()).padStart(2, '0')
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const year = d.getFullYear()
+    return `${day}/${month}/${year}`
+  }
+
   const handleExportCSV = () => {
-    const rows = [
-      ['Date', 'Category', 'Description', 'Amount'],
-      ...filteredExpenses.map(exp => [
-        new Date(exp.expense_date).toLocaleDateString('en-IN'),
-        exp.expense_categories?.name || 'Unknown',
-        exp.description || '',
-        exp.amount.toFixed(2),
-      ])
-    ]
-    const csv = rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
+    // Build HTML table — Excel opens .xls HTML tables natively with full formatting
+    const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const headerCells = [
+      '<th style="background:#f2f2f2;font-weight:bold;border:1px solid #ccc;padding:6px 10px;text-align:left;min-width:100px">Date</th>',
+      '<th style="background:#f2f2f2;font-weight:bold;border:1px solid #ccc;padding:6px 10px;text-align:left;min-width:160px">Category</th>',
+      '<th style="background:#f2f2f2;font-weight:bold;border:1px solid #ccc;padding:6px 10px;text-align:left;min-width:260px">Description</th>',
+      '<th style="background:#f2f2f2;font-weight:bold;border:1px solid #ccc;padding:6px 10px;text-align:right;min-width:110px">Amount (₹)</th>',
+    ].join('')
+
+    const dataRows = filteredExpenses.map(exp => {
+      const date = escHtml(formatDateForCSV(exp.expense_date))
+      const cat  = escHtml(exp.expense_categories?.name || 'Unknown')
+      const desc = escHtml(exp.description || '')
+      const amt  = exp.amount.toFixed(2)
+      return `<tr>
+        <td style="border:1px solid #ccc;padding:5px 10px;text-align:left">${date}</td>
+        <td style="border:1px solid #ccc;padding:5px 10px;text-align:left">${cat}</td>
+        <td style="border:1px solid #ccc;padding:5px 10px;text-align:left">${desc}</td>
+        <td style="border:1px solid #ccc;padding:5px 10px;text-align:right;font-family:monospace">${amt}</td>
+      </tr>`
+    }).join('')
+
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:x="urn:schemas-microsoft-com:office:excel"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8">
+<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>
+<x:ExcelWorksheet><x:Name>Expenses</x:Name>
+<x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+</head><body>
+<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px">
+  <thead><tr>${headerCells}</tr></thead>
+  <tbody>${dataRows}</tbody>
+</table>
+</body></html>`
+
+    const blob = new Blob(['\ufeff' + html], { type: 'application/vnd.ms-excel;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `expenses-${datePreset === 'all' ? 'all-time' : datePreset}-${new Date().toISOString().split('T')[0]}.csv`
+    a.download = `expenses-${datePreset === 'all' ? 'all-time' : datePreset}-${new Date().toISOString().split('T')[0]}.xls`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -241,7 +313,7 @@ export default function Expenses() {
               <button onClick={handleExportCSV} className="flex items-center gap-2 border border-[#E5E7EB] bg-white text-[#374151] px-3 py-2 rounded-xl text-[12px] font-black hover:bg-[#F9FAFB] transition-colors">
                 <Download size={14} /> Export CSV
               </button>
-              <button onClick={() => setShowModal(true)} disabled={dbError} className="bg-[#2E7D32] text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-[#1B5E20] disabled:opacity-50">
+              <button onClick={() => { setEditingExpenseId(null); setForm({ category_id: '', amount: '', description: '', expense_date: new Date().toISOString().split('T')[0] }); setShowModal(true) }} disabled={dbError} className="bg-[#2E7D32] text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-[#1B5E20] disabled:opacity-50">
                 <Plus size={16} /> Record Expense
               </button>
             </div>
@@ -277,7 +349,14 @@ export default function Expenses() {
                       <td className="px-4 py-3 text-sm text-[#374151]">{exp.description || '—'}</td>
                       <td className="px-4 py-3 text-sm font-black text-red-600">{formatCurrency(exp.amount)}</td>
                       <td className="px-4 py-3 text-right">
-                        <button onClick={() => handleDeleteExpense(exp.id)} className="text-red-400 hover:text-red-600 p-1.5 bg-red-50 rounded-lg"><Trash2 size={14} /></button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button onClick={() => handleEditExpense(exp)} className="text-gray-500 hover:text-[#2E7D32] p-1.5 bg-gray-50 hover:bg-[#FFF8F2] rounded-lg transition-colors" title="Edit expense">
+                            <Edit2 size={14} />
+                          </button>
+                          <button onClick={() => handleDeleteExpense(exp.id)} className="text-red-400 hover:text-red-600 p-1.5 bg-red-50 hover:bg-red-100 rounded-lg transition-colors" title="Delete expense">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -334,8 +413,8 @@ export default function Expenses() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-xl font-black text-[#111111]">Record Expense</h2>
-              <button onClick={() => setShowModal(false)} className="p-2 rounded-xl hover:bg-gray-100"><X size={18} /></button>
+              <h2 className="text-xl font-black text-[#111111]">{editingExpenseId ? 'Edit Expense' : 'Record Expense'}</h2>
+              <button onClick={() => { setShowModal(false); setEditingExpenseId(null) }} className="p-2 rounded-xl hover:bg-gray-100"><X size={18} /></button>
             </div>
             <form onSubmit={handleSaveExpense} className="space-y-4">
               <div>
@@ -358,8 +437,8 @@ export default function Expenses() {
                 <input type="text" value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full border border-[#A5D6A7]/60 p-2.5 rounded-xl text-sm font-bold outline-none focus:border-[#2E7D32]" placeholder="Optional details..." />
               </div>
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowModal(false)} className="flex-1 bg-gray-100 p-3 rounded-xl font-bold text-sm hover:bg-gray-200">Cancel</button>
-                <button type="submit" disabled={submitting} className="flex-1 bg-[#2E7D32] text-white p-3 rounded-xl font-bold text-sm hover:bg-[#1B5E20] disabled:opacity-50">{submitting ? 'Saving...' : 'Save Expense'}</button>
+                <button type="button" onClick={() => { setShowModal(false); setEditingExpenseId(null) }} className="flex-1 bg-gray-100 p-3 rounded-xl font-bold text-sm hover:bg-gray-200">Cancel</button>
+                <button type="submit" disabled={submitting} className="flex-1 bg-[#2E7D32] text-white p-3 rounded-xl font-bold text-sm hover:bg-[#1B5E20] disabled:opacity-50">{submitting ? 'Saving...' : editingExpenseId ? 'Update Expense' : 'Save Expense'}</button>
               </div>
             </form>
           </div>

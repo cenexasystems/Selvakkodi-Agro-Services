@@ -72,7 +72,11 @@ export function createInvoicePdf(data: InvoicePdfData): Blob {
   y += 30
 
   const customerName = String(data.customerName || 'Walk-in Customer').trim()
-  const customerPhone = String(data.phone || '—').trim()
+  const formatPhoneDisplay = (ph: string) => {
+    const d = ph.replace(/\D/g, '')
+    return d.length === 12 && d.startsWith('91') ? `${d.slice(0, 2)} ${d.slice(2)}` : ph
+  }
+  const customerPhone = formatPhoneDisplay(String(data.phone || '—').trim())
   const customerAddress = String(data.address || '').trim()
   const customerNameLines = doc.splitTextToSize(customerName, 165) as string[]
   const customerAddressLines = customerAddress
@@ -161,30 +165,82 @@ export function createInvoicePdf(data: InvoicePdfData): Blob {
     try {
       const footerCanvas = document.createElement('canvas')
       const scale = 3
-      footerCanvas.width = 180 * scale * 3.78
-      footerCanvas.height = 18 * scale * 3.78
+      const footerWidthMm = right - left
+      const footerHeightMm = 21
+      const canvasW = Math.round(footerWidthMm * 3.78 * scale)
+      const canvasH = Math.round(footerHeightMm * 3.78 * scale)
+      footerCanvas.width = canvasW
+      footerCanvas.height = canvasH
       const ctx = footerCanvas.getContext('2d')
       if (ctx) {
-        ctx.scale(scale * 3.78, scale * 3.78)
         ctx.fillStyle = primaryColor
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
-        ctx.font = 'bold 8.5px Inter, Helvetica, Arial, sans-serif'
-        ctx.fillText('Thank you for choosing Selvakkodi Agro Service', 90, 5)
-        ctx.font = "bold 8px 'Noto Sans Tamil', sans-serif"
-        ctx.fillText('செல்வக்கொடி அக்ரோ சர்வீஸை தேர்ந்தெடுத்ததற்கு நன்றி!', 90, 12)
+
+        const maxTextWidth = canvasW - Math.round(12 * 3.78 * scale) // 6mm safe padding each side
+        const enFontSize = Math.round(9.5 * 1.333 * scale)
+        const taFontSize = Math.round(9 * 1.333 * scale)
+
+        const wrap = (text: string, font: string): string[] => {
+          ctx.font = font
+          if (ctx.measureText(text).width <= maxTextWidth) {
+            return [text]
+          }
+          const words = text.split(' ')
+          const lines: string[] = []
+          let cur = ''
+          for (const w of words) {
+            const candidate = cur ? `${cur} ${w}` : w
+            if (ctx.measureText(candidate).width <= maxTextWidth || !cur) {
+              cur = candidate
+            } else {
+              lines.push(cur)
+              cur = w
+            }
+          }
+          if (cur) lines.push(cur)
+          return lines
+        }
+
+        const enFont = `bold ${enFontSize}px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`
+        const taFont = `bold ${taFontSize}px "Noto Sans Tamil", "Nirmala UI", "Latha", "Vijaya", "Tamil Sangam MN", sans-serif`
+
+        const enLines = wrap('Thank you for choosing Selvakkodi Agro Service', enFont)
+        const taLines = wrap('செல்வக்கொடி அக்ரோ சர்வீஸை தேர்ந்தெடுத்ததற்கு நன்றி!', taFont)
+
+        const enLineHeight = Math.round(enFontSize * 1.3)
+        const taLineHeight = Math.round(taFontSize * 1.35)
+        const blockGap = Math.round(3.5 * 3.78 * scale)
+
+        const totalH = (enLines.length * enLineHeight) + blockGap + (taLines.length * taLineHeight)
+        let curY = Math.max(enLineHeight / 2, (canvasH - totalH) / 2 + (enLineHeight / 2))
+        const centerX = canvasW / 2
+
+        ctx.font = enFont
+        for (const line of enLines) {
+          ctx.fillText(line, centerX, curY)
+          curY += enLineHeight
+        }
+
+        curY += blockGap - (enLineHeight / 2) + (taLineHeight / 2)
+        ctx.font = taFont
+        for (const line of taLines) {
+          ctx.fillText(line, centerX, curY)
+          curY += taLineHeight
+        }
+
         const footerImg = footerCanvas.toDataURL('image/png')
-        doc.addImage(footerImg, 'PNG', (pageWidth - 180) / 2, y + 2, 180, 18, undefined, 'FAST')
+        doc.addImage(footerImg, 'PNG', left, y + 2, footerWidthMm, footerHeightMm, undefined, 'FAST')
       }
     } catch {
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(8)
+      doc.setFontSize(8.5)
       doc.setTextColor(primaryColor)
       doc.text('Thank you for choosing Selvakkodi Agro Service', pageWidth / 2, y + 6, { align: 'center' })
     }
   } else {
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
+    doc.setFontSize(8.5)
     doc.setTextColor(primaryColor)
     doc.text('Thank you for choosing Selvakkodi Agro Service', pageWidth / 2, y + 6, { align: 'center' })
   }

@@ -231,20 +231,35 @@ export const Invoice: React.FC<InvoiceProps> = ({
         style={{
           marginTop: 16, paddingTop: 10, borderTop: '1px dashed #d0d0d0',
           display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
+          width: '100%', maxWidth: '100%', boxSizing: 'border-box', paddingLeft: 12, paddingRight: 12,
         }}
       >
-        <div style={{ fontSize: 11.5, fontWeight: 800, color: '#2E7D32', textAlign: 'center' }}>
+        <div
+          style={{
+            fontSize: 11.5,
+            fontWeight: 800,
+            color: '#2E7D32',
+            textAlign: 'center',
+            maxWidth: '100%',
+            overflowWrap: 'break-word',
+            wordWrap: 'break-word',
+            lineHeight: 1.35,
+          }}
+        >
           Thank you for choosing Selvakkodi Agro Service
         </div>
         <div
           style={{
-            fontSize: 11.5,
+            fontSize: 11,
             fontWeight: 700,
             color: '#2E7D32',
-            marginTop: 3,
+            marginTop: 4,
             textAlign: 'center',
-            fontFamily: "'Noto Sans Tamil', 'Inter', sans-serif",
+            fontFamily: "'Noto Sans Tamil', 'Nirmala UI', 'Latha', 'Vijaya', 'Inter', sans-serif",
             lineHeight: 1.4,
+            maxWidth: '100%',
+            overflowWrap: 'break-word',
+            wordWrap: 'break-word',
           }}
         >
           செல்வக்கொடி அக்ரோ சர்வீஸை தேர்ந்தெடுத்ததற்கு நன்றி!

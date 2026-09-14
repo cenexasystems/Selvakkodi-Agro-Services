@@ -4,7 +4,7 @@ import {
   Box, Receipt, AlertCircle, ArrowUp, ArrowDown, Power, Download, TrendingUp,
   Package, Search, RefreshCw, ShieldCheck, ShieldOff, Trophy,
   MessageCircle, ChevronDown, Eye, FileText, Printer, MoreVertical, X, Users, AlertTriangle,
-  Settings, Bell, CheckCircle, Store, Sliders, KeyRound, Lock,
+  Settings, CheckCircle, Store, Sliders, KeyRound, Lock,
 } from 'lucide-react'
 
 // Custom Indian Rupee icon
@@ -141,15 +141,45 @@ const emptyForm = {
   hasVariants: false,
 }
 
+const formatPhoneForCSV = (phone: any): string => {
+  if (!phone) return ''
+  const clean = String(phone).trim()
+  if (!clean) return ''
+  return `="${clean.replace(/"/g, '')}"`
+}
+
+const formatDateForCSV = (dateInput: any): string => {
+  if (!dateInput) return ''
+  const str = String(dateInput).trim()
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (match) {
+    return `${match[3]}/${match[2]}/${match[1]}`
+  }
+  const d = new Date(dateInput)
+  if (isNaN(d.getTime())) return str
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const year = d.getFullYear()
+  return `${day}/${month}/${year}`
+}
+
 const exportCSV = (orders: DashboardOrder[]) => {
   const header = ['Order Ref', 'Customer', 'Phone', 'Date', 'Total (₹)', 'Order Type', 'Status']
   const rows = orders.map(o => [
-    o.order_type === 'online_request' ? o.id : o.invoice_no, o.customer_name, o.phone,
-    new Date(o.created_at).toLocaleDateString('en-IN'),
-    getOrderTotal(o).toFixed(2), o.order_type, o.status,
+    o.order_type === 'online_request' ? o.id : o.invoice_no,
+    o.customer_name,
+    formatPhoneForCSV(o.phone),
+    formatDateForCSV(o.created_at),
+    getOrderTotal(o).toFixed(2),
+    o.order_type,
+    o.status,
   ])
-  const csv = [header, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+  const csv = [header, ...rows].map(r => r.map(c => {
+    const s = String(c ?? '')
+    if (s.startsWith('="') && s.endsWith('"')) return s
+    return `"${s.replace(/"/g, '""')}"`
+  }).join(',')).join('\n')
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -1546,7 +1576,7 @@ export default function Dashboard() {
               <img src="/logo.png" alt="Selvakkodi Agro Service logo" className="w-full h-full object-contain" />
             </div>
             {!sidebarCollapsed && (
-              <h1 className="text-[17px] font-black text-white truncate tracking-tight">Selvakkodi Agro Service</h1>
+              <h1 className="text-[14px] font-black text-white break-words leading-snug tracking-tight">Selvakkodi Agro Service</h1>
             )}
           </Link>
           <button
@@ -1565,7 +1595,7 @@ export default function Dashboard() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white border border-emerald-900/40 shrink-0 overflow-hidden shadow-sm p-1 hover:scale-105 transition-transform">
               <img src="/logo.png" alt="Selvakkodi Agro Service logo" className="w-full h-full object-contain" />
             </div>
-            <span className="text-[15px] font-black text-white truncate">Selvakkodi Agro Service</span>
+            <span className="text-[13px] font-black text-white break-words leading-snug">Selvakkodi Agro Service</span>
           </Link>
         </div>
         {/* Nav */}
@@ -1619,109 +1649,6 @@ export default function Dashboard() {
 
       {/* Main */}
       <main className="flex-grow flex flex-col overflow-hidden">
-        {/* Top Action & Notification Bar */}
-        <header className={`h-14 border-b border-borderLight bg-white px-4 sm:px-6 items-center justify-between shrink-0 shadow-sm z-20 ${tab === 'billing' ? 'hidden' : 'flex'}`}>
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-black uppercase tracking-wider text-[#2E7D32] bg-[#E8F5E9] px-2.5 py-1 rounded-full border border-[#C8E6C9]">
-              {role === 'admin' ? 'Admin Portal' : 'Staff Portal'}
-            </span>
-            <span className="text-sm font-bold text-[#111111] capitalize">
-              {tab.replace('_', ' ')}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* Notification Bell Dropdown */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setNotifDropdownOpen(o => !o)}
-                className="relative p-2 rounded-xl text-[#374151] hover:bg-[#F3F4F6] hover:text-[#111111] transition-colors"
-                title="Notifications"
-                aria-label="View notifications"
-              >
-                <Bell size={18} />
-                {unreadNotifCount > 0 && (
-                  <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-black text-white ring-2 ring-white">
-                    {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
-                  </span>
-                )}
-              </button>
-
-              {notifDropdownOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setNotifDropdownOpen(false)}
-                  />
-                  <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl border border-borderLight bg-white shadow-2xl p-4 z-50 animate-in fade-in">
-                    <div className="flex items-center justify-between pb-3 border-b border-borderLight">
-                      <div className="flex items-center gap-2">
-                        <Bell size={15} className="text-[#2E7D32]" />
-                        <span className="text-xs font-black uppercase tracking-wider text-[#111111]">Notifications</span>
-                        {unreadNotifCount > 0 && (
-                          <span className="text-[10px] font-bold bg-[#E8F5E9] text-[#2E7D32] px-1.5 py-0.5 rounded-full">
-                            {unreadNotifCount} unread
-                          </span>
-                        )}
-                      </div>
-                      {unreadNotifCount > 0 && (
-                        <button
-                          type="button"
-                          onClick={handleMarkAllNotificationsRead}
-                          className="text-[11px] font-bold text-[#2E7D32] hover:underline"
-                        >
-                          Mark all read
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="max-h-72 overflow-y-auto divide-y divide-borderLight/60 mt-2">
-                      {notifications.length === 0 ? (
-                        <div className="py-8 text-center text-xs font-semibold text-[#9CA3AF]">
-                          No notifications yet
-                        </div>
-                      ) : (
-                        notifications.map(n => (
-                          <div
-                            key={n.id}
-                            onClick={() => handleMarkSingleNotificationRead(n.id)}
-                            className={`p-2.5 rounded-xl cursor-pointer transition-colors ${n.is_read ? 'hover:bg-[#F9FAFB]' : 'bg-[#E8F5E9]/30 hover:bg-[#E8F5E9]/50'}`}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <span className="text-xs font-black text-[#111111]">{n.title}</span>
-                              <span className="text-[9px] font-semibold text-[#9CA3AF] shrink-0">
-                                {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-[#4B5563] mt-0.5 leading-relaxed">{n.message}</p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setChangePasswordOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#A5D6A7]/70 text-[#1B5E20] hover:bg-emerald-50 text-xs font-bold transition-colors shadow-sm"
-              title="Change Account Password"
-            >
-              <KeyRound size={14} /> {l('Password', 'கடவுச்சொல்')}
-            </button>
-
-            <Link
-              to="/pos"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-maroon-dark text-white text-xs font-bold hover:bg-maroon transition-colors"
-            >
-              <ShoppingCart size={14} /> POS
-            </Link>
-          </div>
-        </header>
-
         <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden overflow-y-auto">
 
         {/* ΓöÇΓöÇ ANALYTICS TAB ΓöÇΓöÇ */}
@@ -2386,16 +2313,18 @@ export default function Dashboard() {
                       <h3 className="text-[16px] font-bold text-[#111111]">Revenue Trend {analytics.chartYear}</h3>
                       <span className="text-[12px] font-bold text-maroon-dark bg-red-50 px-2.5 py-1 rounded-md">Avg {formatCurrency(analytics.monthlyRevenue || 0)}/mo</span>
                     </div>
-                    <div className="h-64 mt-4">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={analytics.monthlyTrend}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
-                          <XAxis dataKey="month" tick={{ fill: '#6B7280', fontSize: 11, fontWeight: 700 }} axisLine={false} tickLine={false} interval={0} angle={-45} textAnchor="end" height={60} />
-                          <YAxis hide />
-                          <Tooltip cursor={{ fill: '#F9FAFB' }} formatter={(value) => formatCurrency(toNumber(value as number | string, 0))} />
-                          <Bar dataKey="revenue" fill="#2E7D32" radius={[4, 4, 0, 0]} maxBarSize={32} />
-                        </BarChart>
-                      </ResponsiveContainer>
+                    <div className="h-64 mt-4 overflow-x-auto">
+                      <div style={{ minWidth: 700 }} className="h-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={analytics.monthlyTrend}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
+                            <XAxis dataKey="month" tick={{ fill: '#6B7280', fontSize: 11, fontWeight: 700 }} axisLine={false} tickLine={false} interval={0} height={36} />
+                            <YAxis hide />
+                            <Tooltip cursor={{ fill: '#F9FAFB' }} formatter={(value) => formatCurrency(toNumber(value as number | string, 0))} />
+                            <Bar dataKey="revenue" fill="#2E7D32" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
                     </div>
                   </div>
                   <div className="space-y-6">

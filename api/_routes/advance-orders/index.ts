@@ -25,7 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (search && status && status !== 'all') {
         const pattern = `%${search}%`;
         orders = await sql`
-          SELECT *
+          SELECT *, expected_delivery_date::text as expected_delivery_date
           FROM public.advance_orders
           WHERE status = ${status}
             AND (
@@ -41,7 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else if (search) {
         const pattern = `%${search}%`;
         orders = await sql`
-          SELECT *
+          SELECT *, expected_delivery_date::text as expected_delivery_date
           FROM public.advance_orders
           WHERE deposit_id ILIKE ${pattern}
              OR customer_name ILIKE ${pattern}
@@ -53,7 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         `;
       } else if (status && status !== 'all') {
         orders = await sql`
-          SELECT *
+          SELECT *, expected_delivery_date::text as expected_delivery_date
           FROM public.advance_orders
           WHERE status = ${status}
           ORDER BY created_at DESC
@@ -61,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         `;
       } else {
         orders = await sql`
-          SELECT *
+          SELECT *, expected_delivery_date::text as expected_delivery_date
           FROM public.advance_orders
           ORDER BY created_at DESC
           LIMIT ${limit} OFFSET ${offset}
@@ -130,7 +130,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const validUserId = user.id && UUID_REGEX.test(String(user.id)) ? String(user.id) : null;
 
       const result = await sql`
-        SELECT * FROM public.create_advance_order(
+        SELECT *, expected_delivery_date::text as expected_delivery_date FROM public.create_advance_order(
           ${customerName},
           ${phone},
           ${address},

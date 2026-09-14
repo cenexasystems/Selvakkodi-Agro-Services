@@ -7,12 +7,24 @@ import type { AdvanceOrder } from '../services/advanceOrderService'
 const esc = (value: string) => value.replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char] || char))
 
 // Format currency for PDF output
-const pdfMoney = (value: number): string => {
-  const formatted = formatCurrency(value)
-  return formatted.replace(/^INR\s*/, 'Rs. ').replace(/^₹\s*/, 'Rs. ')
+const pdfMoney = (value: number) => `Rs. ${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+function formatExpectedDelivery(dateStr?: string | null): string {
+  if (!dateStr) return '—'
+  const raw = String(dateStr).trim()
+  if (!raw) return '—'
+  const ymdMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (ymdMatch) {
+    const [, y, m, d] = ymdMatch
+    const dObj = new Date(Number(y), Number(m) - 1, Number(d))
+    if (!isNaN(dObj.getTime())) return dObj.toLocaleDateString('en-IN')
+  }
+  const parsed = new Date(raw)
+  if (!isNaN(parsed.getTime())) return parsed.toLocaleDateString('en-IN')
+  return raw
 }
 
-export function advanceReceiptPdf(order: AdvanceOrder) {
+export function advanceReceiptPdf(order: AdvanceOrder): File {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   doc.setFillColor('#2E7D32'); doc.rect(0, 0, 210, 5, 'F')
   try { doc.addImage(LOGO_BASE64, 'JPEG', 16, 11, 24, 24) } catch {}
@@ -32,7 +44,7 @@ export function advanceReceiptPdf(order: AdvanceOrder) {
   doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor('#6b7280'); doc.text(`Created: ${new Date(order.created_at).toLocaleString('en-IN')}`, 194, 49, { align: 'right' })
   const rows = [
     ['Customer', order.customer_name], ['Phone', order.phone], ['Address', order.address || '-'], ['Product', order.product_name],
-    ['Category', order.category || '-'], ['Expected delivery', new Date(`${order.expected_delivery_date}T00:00:00`).toLocaleDateString('en-IN')],
+    ['Category', order.category || '-'], ['Expected delivery', formatExpectedDelivery(order.expected_delivery_date)],
   ]
   let y = 66
   rows.forEach(([label, value]) => { doc.setFont('helvetica', 'bold'); doc.setTextColor('#6b7280'); doc.text(label.toUpperCase(), 16, y); doc.setFont('helvetica', 'normal'); doc.setTextColor('#111827'); doc.text(String(value), 64, y, { maxWidth: 126 }); y += 10 })
@@ -101,7 +113,7 @@ export function printAdvanceReceipt(order: AdvanceOrder) {
 ${order.address ? `<div class="r"><span class="label">Address</span><span>${esc(order.address)}</span></div>` : ''}
 <div class="r"><span class="label">Product</span><span>${esc(order.product_name)}</span></div>
 ${order.category ? `<div class="r"><span class="label">Category</span><span>${esc(order.category)}</span></div>` : ''}
-<div class="r"><span class="label">Delivery</span><span>${esc(new Date(`${order.expected_delivery_date}T00:00:00`).toLocaleDateString('en-IN'))}</span></div>
+<div class="r"><span class="label">Delivery</span><span>${esc(formatExpectedDelivery(order.expected_delivery_date))}</span></div>
 <div class="r"><span class="label">Payment</span><span>${esc(depositPayment)}</span></div>
 <div class="line"></div>
 <div class="r"><span>Total Amount</span><span class="bold">${esc(formatCurrency(order.total_amount))}</span></div>

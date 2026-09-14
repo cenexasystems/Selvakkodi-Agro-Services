@@ -1,6 +1,13 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import dns from 'node:dns'
+
+try {
+  if (dns && typeof dns.setDefaultResultOrder === 'function') {
+    dns.setDefaultResultOrder('ipv4first')
+  }
+} catch {}
 
 
 function vercelApiDevPlugin(): Plugin {

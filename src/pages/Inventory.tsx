@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { Package, Search, AlertTriangle, X, RefreshCw, Edit2, Plus, Trash2, ChevronDown, Download, TrendingUp, PieChart, Sliders, History, Minus } from 'lucide-react'
+import { Package, Search, AlertTriangle, X, RefreshCw, Edit2, Plus, Trash2, ChevronDown, Download, TrendingUp, PieChart, Sliders, History, Minus, PlusCircle, MinusCircle, CornerUpLeft, Target, CheckCircle } from 'lucide-react'
 import { formatCurrency } from '../lib/retail'
 import { useSound } from '../context/SoundContext'
 import { useSettingsStore, useAdminAuthStore, useVariantStore } from '../store/store'
@@ -37,7 +37,7 @@ interface Category {
 interface AdjustModal {
   product: InventoryProduct
   newQty: string
-  adjustType: 'restock' | 'correction' | 'loss' | 'return'
+  adjustType: 'restock' | 'customer_return' | 'loss_damaged' | 'reconciliation'
   note: string
 }
 
@@ -369,6 +369,19 @@ export default function Inventory() {
   }, [getDefaultVariant, variantsMap])
 
   const downloadCSV = () => {
+    const formatDateForCSV = (dateInput: any): string => {
+      if (!dateInput) return ''
+      const str = String(dateInput).trim()
+      const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/)
+      if (match) return `${match[3]}/${match[2]}/${match[1]}`
+      const d = new Date(dateInput)
+      if (isNaN(d.getTime())) return str
+      const day = String(d.getDate()).padStart(2, '0')
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const year = d.getFullYear()
+      return `${day}/${month}/${year}`
+    }
+
     const headers = ['ID', 'Product Name', 'Category', 'Stock Quantity', 'Low Stock Alert', 'Price (₹)', 'Purchase Price (₹)', 'Status', 'Last Updated']
     const rows = products.map(p => {
       const status = getStatus(p, globalLimit) === 'out' ? 'Out of Stock' : getStatus(p, globalLimit) === 'low' ? 'Low Stock' : 'Normal'
@@ -381,12 +394,12 @@ export default function Inventory() {
         getProductPrice(p),
         Number(p.purchase_price) || 0,
         status,
-        new Date(p.updated_at).toLocaleString('en-IN')
+        `"${formatDateForCSV(p.updated_at)}"`
       ].join(',')
     })
     
     const csvContent = [headers.join(','), ...rows].join('\n')
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
     link.setAttribute('download', `inventory_report_${new Date().toISOString().split('T')[0]}.csv`)
@@ -469,7 +482,8 @@ export default function Inventory() {
     if (status === 'low' || status === 'out') {
       play('alert')
     }
-    setAdjustModal({ product, newQty: String(product.stock_quantity), adjustType: 'restock', note: '' })
+    // newQty starts at 1 for delta-types; starts at current stock for reconciliation
+    setAdjustModal({ product, newQty: '1', adjustType: 'restock', note: '' })
   }
 
 
@@ -484,14 +498,33 @@ export default function Inventory() {
   const saveAdjust = async () => {
     if (!adjustModal) return
     const { product, newQty, adjustType, note } = adjustModal
-    const newQtyNum = parseFloat(newQty)
-    if (isNaN(newQtyNum) || newQtyNum < 0) { setNotice('Please enter a valid quantity.'); return }
+    const qtyNum = parseFloat(newQty)
+    if (isNaN(qtyNum) || newQty === '') { setNotice('Please enter a valid quantity.'); return }
+
+    const oldQty = product.stock_quantity
+
+    // Compute delta and final new stock based on adjustment type
+    let delta: number
+    let newQtyNum: number
+    if (adjustType === 'restock' || adjustType === 'customer_return') {
+      if (qtyNum <= 0) { setNotice('Quantity to add must be greater than 0.'); return }
+      delta = qtyNum
+      newQtyNum = oldQty + delta
+    } else if (adjustType === 'loss_damaged') {
+      if (qtyNum <= 0) { setNotice('Quantity to remove must be greater than 0.'); return }
+      delta = -qtyNum
+      newQtyNum = Math.max(0, oldQty + delta)
+      if (oldQty + delta < 0) { setNotice(`Cannot remove ${qtyNum} units — only ${oldQty} in stock.`); return }
+    } else {
+      // reconciliation — absolute count
+      if (qtyNum < 0) { setNotice('Exact count cannot be negative.'); return }
+      newQtyNum = qtyNum
+      delta = newQtyNum - oldQty
+    }
+
     setSaving(true)
     try {
-      const oldQty = product.stock_quantity
-      const delta = newQtyNum - oldQty
-
-      // Call the new Neon-backed adjust-stock endpoint
+      // Apply the delta atomically
       const res = await fetch('/api/inventory/adjust-stock', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -502,17 +535,24 @@ export default function Inventory() {
         throw new Error(body?.error || `adjust-stock failed (${res.status})`)
       }
 
-      // Log the audit trail
+      // Map adjustType → legacy reason string
+      const legacyReason =
+        adjustType === 'restock' ? 'restock'
+        : adjustType === 'customer_return' ? 'return'
+        : adjustType === 'loss_damaged' ? 'loss'
+        : 'manual_adjustment'
+
+      // Log with both legacy reason and new typed adjustment_type + note
       await createInventoryLog({
         product_id: product.id,
         old_quantity: oldQty,
         new_quantity: newQtyNum,
         adjustment: delta,
-        reason: adjustType === 'restock' ? 'restock' : adjustType === 'loss' ? 'loss' : adjustType === 'return' ? 'return' : 'manual_adjustment',
-        reference_id: note || null,
+        reason: legacyReason,
+        adjustment_type: adjustType,
+        note: note || null,
       })
 
-      // Transition engine: triggers the existing alert service (for in-app toast/banner)
       inventoryAlertService.recordStockChange(product, oldQty, newQtyNum, globalLimit)
 
       play('success')
@@ -1021,116 +1061,254 @@ export default function Inventory() {
       {activeTab === 'analytics' && <InventoryAnalytics products={products} downloadCSV={downloadCSV} getProductPrice={getProductPrice} />}
 
       {/* ── Adjust Stock Modal ── */}
-      {adjustModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-lg font-black text-[#111111]">Adjust Inventory Stock (Selvakkodi Agro Service)</h2>
-                <p className="text-xs text-[#6B7280]">Restock, remove stock, or reconcile physical count</p>
-              </div>
-              <button onClick={() => setAdjustModal(null)} className="p-2 rounded-xl hover:bg-gray-100"><X size={18} /></button>
-            </div>
+      {adjustModal && (() => {
+        const { product, newQty, adjustType, note } = adjustModal
+        const currentStock = product.stock_quantity
+        const qtyNum = parseFloat(newQty) || 0
 
-            <div className="bg-[#FAFAFA] rounded-xl p-3 mb-4 flex justify-between items-center border border-[#A5D6A7]/60">
-              <div>
-                <p className="text-[11px] font-black uppercase text-[#6B7280]">Product</p>
-                <p className="font-black text-[#111111]">{adjustModal.product.name}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[11px] font-black uppercase text-[#6B7280]">Current Stock</p>
-                <p className={`text-2xl font-black ${getStatus(adjustModal.product) === 'out' ? 'text-red-600' : getStatus(adjustModal.product) === 'low' ? 'text-orange-600' : 'text-[#111111]'}`}>
-                  {adjustModal.product.stock_quantity}
-                </p>
-              </div>
-            </div>
+        // Compute preview values
+        let computedNew: number
+        let delta: number
+        if (adjustType === 'restock' || adjustType === 'customer_return') {
+          delta = qtyNum
+          computedNew = currentStock + qtyNum
+        } else if (adjustType === 'loss_damaged') {
+          delta = -qtyNum
+          computedNew = Math.max(0, currentStock - qtyNum)
+        } else {
+          // reconciliation
+          computedNew = qtyNum
+          delta = qtyNum - currentStock
+        }
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-black uppercase text-[#374151] mb-1.5">Reason</label>
-                <select value={adjustModal.adjustType} onChange={e => setAdjustModal(m => m ? { ...m, adjustType: e.target.value as AdjustModal['adjustType'] } : m)}
-                  className="w-full border border-[#A5D6A7]/60 p-2.5 rounded-xl text-sm font-bold outline-none focus:border-[#2E7D32] bg-white">
-                  <option value="restock">Restock (received new stock)</option>
-                  <option value="correction">Manual Adjustment (fix count)</option>
-                  <option value="loss">Loss / Damaged</option>
-                  <option value="return">Customer Return</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] font-black uppercase text-[#374151] mb-1.5">New Quantity</label>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const cur = parseFloat(adjustModal.newQty) || 0
-                      if (cur > 0) {
-                        setAdjustModal(m => m ? { ...m, newQty: String(Math.max(0, cur - 1)) } : m)
-                      }
-                    }}
-                    disabled={(parseFloat(adjustModal.newQty) || 0) <= 0}
-                    className="w-10 h-10 flex items-center justify-center rounded-xl border border-[#A5D6A7]/60 bg-gray-50 hover:bg-gray-100 text-[#374151] disabled:opacity-40 disabled:cursor-not-allowed shrink-0 transition-colors"
-                  >
-                    <Minus size={16} />
-                  </button>
-                  <input
-                    type="number"
-                    min="0"
-                    value={adjustModal.newQty}
-                    onChange={e => setAdjustModal(m => m ? { ...m, newQty: e.target.value } : m)}
-                    className="flex-1 border border-[#A5D6A7]/60 p-2 rounded-xl text-base font-black outline-none focus:border-[#2E7D32] text-center"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const cur = parseFloat(adjustModal.newQty) || 0
-                      setAdjustModal(m => m ? { ...m, newQty: String(cur + 1) } : m)
-                    }}
-                    className="w-10 h-10 flex items-center justify-center rounded-xl border border-[#A5D6A7]/60 bg-gray-50 hover:bg-gray-100 text-[#374151] shrink-0 transition-colors"
-                  >
-                    <Plus size={16} />
-                  </button>
+        const wouldGoNegative = adjustType === 'loss_damaged' && qtyNum > currentStock
+        const isDisabled = saving || newQty === '' || qtyNum === 0 || (adjustType !== 'reconciliation' && qtyNum <= 0) || wouldGoNegative
+
+        const QUICK_VALS = [1, 5, 10, 25, 50, 100]
+
+        const qtyLabel =
+          adjustType === 'restock' ? 'QUANTITY TO ADD (RESTOCK)'
+          : adjustType === 'customer_return' ? 'QUANTITY TO ADD (CUSTOMER RETURN)'
+          : adjustType === 'loss_damaged' ? 'QUANTITY TO REMOVE (LOSS/DAMAGED)'
+          : 'SET EXACT COUNT (RECONCILIATION)'
+
+        const notePlaceholder =
+          adjustType === 'restock' ? 'e.g. Received new stock shipment / batch delivery'
+          : adjustType === 'customer_return' ? 'e.g. Customer returned damaged or unwanted product'
+          : adjustType === 'loss_damaged' ? 'e.g. Spoiled during storage / broken in transit'
+          : 'e.g. Physical count verified during stock audit'
+
+        const confirmLabel = saving ? 'Saving...'
+          : adjustType === 'restock' ? `Confirm Restock (+${qtyNum} Units)`
+          : adjustType === 'customer_return' ? `Confirm Customer Return (+${qtyNum} Units)`
+          : adjustType === 'loss_damaged' ? `Confirm Loss/Damaged (−${qtyNum} Units)`
+          : `Confirm Reconciliation (New Count: ${qtyNum} Units)`
+
+        type AdjCard = { key: AdjustModal['adjustType']; label: string; sub: string; Icon: React.ElementType }
+        const ADJ_CARDS: AdjCard[] = [
+          { key: 'restock',         label: 'Restock',         sub: '+ Add Units',     Icon: PlusCircle   },
+          { key: 'customer_return', label: 'Customer Return', sub: '+ Add Units',     Icon: CornerUpLeft },
+          { key: 'loss_damaged',    label: 'Loss / Damaged',  sub: '− Deduct Units',  Icon: MinusCircle  },
+          { key: 'reconciliation',  label: 'Reconciliation',  sub: 'Set Exact Count', Icon: Target       },
+        ]
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+
+              {/* Header */}
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-lg font-black text-[#111111]">Adjust Inventory Stock (Selvakkodi Agro Service)</h2>
+                  <p className="text-xs text-[#6B7280]">Restock, remove stock, or reconcile physical count</p>
                 </div>
-                <div className="flex items-center gap-1.5 mt-2">
-                  <span className="text-[10px] font-black uppercase text-[#6B7280] mr-1">Add:</span>
-                  {[5, 10, 25, 50].map(val => (
+                <button onClick={() => setAdjustModal(null)} className="p-2 rounded-xl hover:bg-gray-100"><X size={18} /></button>
+              </div>
+
+              {/* Product info box */}
+              <div className="bg-[#FAFAFA] rounded-xl p-3 mb-4 flex justify-between items-start border border-[#A5D6A7]/60">
+                <div>
+                  <p className="text-[11px] font-black uppercase text-[#6B7280] flex items-center gap-1 mb-0.5">
+                    <Package size={11} /> Product
+                  </p>
+                  <p className="font-black text-[#111111]">{product.name}</p>
+                  {product.category && (
+                    <span className="inline-block mt-1 px-2 py-0.5 bg-[#E8F5E9] text-[#2E7D32] text-[10px] font-black rounded-full border border-[#A5D6A7]/60">
+                      {product.category}
+                    </span>
+                  )}
+                </div>
+                <div className="text-right shrink-0 ml-3">
+                  <p className="text-[11px] font-black uppercase text-[#6B7280]">Current Stock</p>
+                  <p className={`text-2xl font-black leading-tight ${getStatus(product) === 'out' ? 'text-red-600' : getStatus(product) === 'low' ? 'text-orange-600' : 'text-[#111111]'}`}>
+                    {currentStock}
+                  </p>
+                  <p className="text-[10px] text-[#6B7280] font-bold">units</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+
+                {/* Adjustment Type Cards */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-[#374151] mb-2">Select Adjustment Type *</label>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {ADJ_CARDS.map(({ key, label, sub, Icon }) => {
+                      const isSelected = adjustType === key
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => {
+                            const nextQty = key === 'reconciliation' ? String(currentStock) : '1'
+                            setAdjustModal(m => m ? { ...m, adjustType: key, newQty: nextQty } : m)
+                            setNotice('')
+                          }}
+                          className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 text-center transition-all ${
+                            isSelected
+                              ? 'border-[#2E7D32] bg-[#E8F5E9] text-[#2E7D32]'
+                              : 'border-[#A5D6A7]/60 bg-white text-[#374151] hover:border-[#2E7D32]/40 hover:bg-[#F1F8F1]'
+                          }`}
+                        >
+                          <Icon size={18} strokeWidth={isSelected ? 2.5 : 1.8} />
+                          <span className="text-[10px] font-black leading-tight">{label}</span>
+                          <span className={`text-[9px] font-bold leading-tight ${isSelected ? 'text-[#4CAF50]' : 'text-[#9CA3AF]'}`}>{sub}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Quantity field */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-[#374151] mb-1.5">{qtyLabel} *</label>
+                  <div className="flex items-center gap-2">
                     <button
-                      key={val}
                       type="button"
                       onClick={() => {
-                        const base = adjustModal.product.stock_quantity
-                        setAdjustModal(m => m ? { ...m, newQty: String(base + val) } : m)
+                        const cur = parseFloat(newQty) || 0
+                        const minVal = adjustType === 'reconciliation' ? 0 : 1
+                        if (cur > minVal) {
+                          setAdjustModal(m => m ? { ...m, newQty: String(cur - 1) } : m)
+                        }
                       }}
-                      className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold transition-colors"
+                      disabled={(parseFloat(newQty) || 0) <= (adjustType === 'reconciliation' ? 0 : 1)}
+                      className="w-10 h-10 flex items-center justify-center rounded-xl border border-[#A5D6A7]/60 bg-gray-50 hover:bg-gray-100 text-[#374151] disabled:opacity-40 disabled:cursor-not-allowed shrink-0 transition-colors"
                     >
-                      +{val}
+                      <Minus size={16} />
                     </button>
-                  ))}
+                    <input
+                      type="number"
+                      min={adjustType === 'reconciliation' ? '0' : '1'}
+                      value={newQty}
+                      onChange={e => { setAdjustModal(m => m ? { ...m, newQty: e.target.value } : m); setNotice('') }}
+                      className="flex-1 border border-[#A5D6A7]/60 p-2 rounded-xl text-base font-black outline-none focus:border-[#2E7D32] focus:ring-1 focus:ring-[#2E7D32]/20 text-center"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cur = parseFloat(newQty) || 0
+                        setAdjustModal(m => m ? { ...m, newQty: String(cur + 1) } : m)
+                      }}
+                      className="w-10 h-10 flex items-center justify-center rounded-xl border border-[#A5D6A7]/60 bg-gray-50 hover:bg-gray-100 text-[#374151] shrink-0 transition-colors"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+
+                  {/* Quick-select pills — hidden for Reconciliation */}
+                  {adjustType !== 'reconciliation' && (
+                    <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                      <span className="text-[10px] font-black uppercase text-[#6B7280] mr-0.5">Quick:</span>
+                      {QUICK_VALS.map(val => {
+                        const isActive = newQty === String(val)
+                        return (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => { setAdjustModal(m => m ? { ...m, newQty: String(val) } : m); setNotice('') }}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors ${
+                              isActive
+                                ? 'bg-[#2E7D32] text-white border-[#2E7D32]'
+                                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+                            }`}
+                          >
+                            +{val}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* Live preview box */}
+                  {newQty !== '' && !isNaN(qtyNum) && (
+                    <div className="mt-2 flex items-center justify-between bg-[#F9FAFB] border border-[#A5D6A7]/60 rounded-xl px-3 py-2">
+                      <span className="text-[11px] text-[#374151] font-bold">
+                        Current: <span className="font-black text-[#111111]">{currentStock}</span>
+                        {' → '}
+                        New Stock:{' '}
+                        <span className={`font-black ${wouldGoNegative ? 'text-red-600' : computedNew > currentStock ? 'text-[#2E7D32]' : computedNew < currentStock ? 'text-red-600' : 'text-[#111111]'}`}>
+                          {computedNew} units
+                        </span>
+                      </span>
+                      <span className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-black shrink-0 ${
+                        delta > 0 ? 'bg-[#E8F5E9] text-[#2E7D32]'
+                        : delta < 0 ? 'bg-red-50 text-red-600'
+                        : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {delta > 0 ? `+${delta}` : delta === 0 ? '±0' : delta}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Negative-stock validation */}
+                  {wouldGoNegative && (
+                    <p className="text-xs text-red-600 font-bold mt-1.5">
+                      ⚠ Cannot remove {qtyNum} units — only {currentStock} in stock.
+                    </p>
+                  )}
                 </div>
-                {adjustModal.newQty !== '' && !isNaN(parseFloat(adjustModal.newQty)) && (
-                  <p className="text-[11px] text-[#6B7280] mt-1 text-right">
-                    Change: <span className={parseFloat(adjustModal.newQty) >= adjustModal.product.stock_quantity ? 'text-green-600 font-black' : 'text-red-600 font-black'}>
-                      {parseFloat(adjustModal.newQty) >= adjustModal.product.stock_quantity ? '+' : ''}{parseFloat(adjustModal.newQty) - adjustModal.product.stock_quantity}
-                    </span>
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-[10px] font-black uppercase text-[#374151] mb-1.5">Note</label>
-                <input type="text" value={adjustModal.note} onChange={e => setAdjustModal(m => m ? { ...m, note: e.target.value } : m)}
-                  className="w-full border border-[#A5D6A7]/60 p-2.5 rounded-xl text-sm font-bold outline-none focus:border-[#2E7D32]"
-                  placeholder="Optional note..." />
-              </div>
-              {notice && <p className="text-sm text-red-600 font-bold bg-red-50 p-3 rounded-xl">{notice}</p>}
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => { setAdjustModal(null); setNotice('') }} className="flex-1 bg-gray-100 p-3 rounded-xl font-bold text-sm hover:bg-gray-200">Cancel</button>
-                <button onClick={() => void saveAdjust()} disabled={saving} className="flex-1 bg-[#2E7D32] text-white p-3 rounded-xl font-bold text-sm hover:bg-[#1B5E20] disabled:opacity-50">
-                  {saving ? 'Saving...' : 'Save'}
-                </button>
+
+                {/* Note / Reason field */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-[#374151] mb-1.5">
+                    Adjustment Note / Reason Description (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={note}
+                    onChange={e => setAdjustModal(m => m ? { ...m, note: e.target.value } : m)}
+                    className="w-full border border-[#A5D6A7]/60 p-2.5 rounded-xl text-sm font-bold outline-none focus:border-[#2E7D32] focus:ring-1 focus:ring-[#2E7D32]/20"
+                    placeholder={notePlaceholder}
+                  />
+                </div>
+
+                {notice && <p className="text-sm text-red-600 font-bold bg-red-50 p-3 rounded-xl">{notice}</p>}
+
+                {/* Action buttons */}
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setAdjustModal(null); setNotice('') }}
+                    className="flex-1 bg-gray-100 p-3 rounded-xl font-bold text-sm hover:bg-gray-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => void saveAdjust()}
+                    disabled={isDisabled}
+                    className="flex-1 bg-[#2E7D32] text-white p-3 rounded-xl font-bold text-sm hover:bg-[#1B5E20] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                  >
+                    {!saving && <CheckCircle size={15} />}
+                    <span>{confirmLabel}</span>
+                  </button>
+                </div>
+
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* ── Stock Audit Ledger Modal ── */}
       {historyModal && (
