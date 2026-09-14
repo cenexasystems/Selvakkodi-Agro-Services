@@ -120,6 +120,8 @@ export async function createInventoryLog(payload: {
   new_quantity: number
   adjustment: number
   reason: string
+  adjustment_type?: string | null
+  note?: string | null
   reference_id?: string | null
 }): Promise<{ data: any | null; error: string | null }> {
   try {
