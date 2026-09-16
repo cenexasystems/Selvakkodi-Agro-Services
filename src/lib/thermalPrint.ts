@@ -1,5 +1,5 @@
 import { BRAND_ADDRESS, BRAND_EMAIL, BRAND_EN, BRAND_LOGO, BRAND_OWNER, BRAND_PHONE_DISPLAY, BRAND_WHATSAPP } from './brand'
-import { formatCurrency, formatInvoiceNo } from './retail'
+import { formatCurrency, formatInvoiceNo, formatBillDateTime } from './retail'
 
 export interface ThermalReceiptData {
   invoiceNo: string
@@ -44,16 +44,7 @@ export function printThermalReceipt(data: ThermalReceiptData) {
     return d.length === 12 && d.startsWith('91') ? `${d.slice(0, 2)} ${d.slice(2)}` : ph
   }
 
-  const dateStr = (() => {
-    try {
-      const d = new Date(data.date)
-      // If date string has no time component (e.g. "2026-08-31"), use current time instead
-      const hasTime = data.date.includes('T') || data.date.includes(' ')
-      const display = hasTime ? d : new Date()
-      return display.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-    }
-    catch { return new Date().toLocaleString('en-IN') }
-  })()
+  const dateStr = formatBillDateTime(data.date)
 
   const html = `
     <!DOCTYPE html>

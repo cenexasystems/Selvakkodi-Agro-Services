@@ -487,3 +487,33 @@ export const normalizeStructuredOrderItem = (raw: Record<string, unknown>): Stru
     note: raw.note ? String(raw.note) : (raw.manual_note ? String(raw.manual_note) : null),
   }
 }
+
+/**
+ * Standardized Date/Time formatter across Invoice preview, printed receipts, and Deposits list.
+ * Output format: "DD Mon YYYY, hh:mm am/pm" (e.g. "15 Sep 2026, 02:30 pm")
+ */
+export const formatBillDateTime = (dateInput?: string | Date | number | null): string => {
+  if (!dateInput) return '—'
+  const raw = String(dateInput).trim()
+  try {
+    let d: Date
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      const [y, m, day] = raw.split('-').map(Number)
+      const now = new Date()
+      d = new Date(y, m - 1, day, now.getHours(), now.getMinutes(), now.getSeconds())
+    } else {
+      d = new Date(dateInput)
+    }
+    if (isNaN(d.getTime())) return raw
+    return d.toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  } catch {
+    return String(dateInput)
+  }
+}
+

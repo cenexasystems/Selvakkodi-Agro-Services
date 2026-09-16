@@ -38,6 +38,19 @@
   button, a, input, textarea, select {
     -webkit-tap-highlight-color: transparent;
   }
+  /* iOS Safari date input normalization */
+  input[type="date"] {
+    box-sizing: border-box;
+    -webkit-appearance: none;
+    appearance: none;
+    max-width: 100%;
+  }
+  input[type="date"]::-webkit-date-and-time-value {
+    min-height: 1.5em;
+    margin: 0;
+    text-align: left;
+    line-height: normal;
+  }
   img {
     max-width: 100%;
     display: block;

@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf'
 import { BRAND_ADDRESS, BRAND_EMAIL, BRAND_EN, BRAND_LOGO, BRAND_OWNER, BRAND_PHONE_DISPLAY } from './brand'
 import { LOGO_BASE64 } from './logoBase64'
-import { formatCurrency } from './retail'
+import { formatCurrency, formatBillDateTime } from './retail'
 import type { AdvanceOrder } from '../services/advanceOrderService'
 
 const esc = (value: string) => value.replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char] || char))
@@ -41,7 +41,7 @@ export function advanceReceiptPdf(order: AdvanceOrder): File {
   doc.setDrawColor('#2E7D32')
   doc.line(16, 38, 194, 38)
   doc.setTextColor('#111827'); doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.text(order.deposit_id, 16, 49)
-  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor('#6b7280'); doc.text(`Created: ${new Date(order.created_at).toLocaleString('en-IN')}`, 194, 49, { align: 'right' })
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor('#6b7280'); doc.text(`Created: ${formatBillDateTime(order.created_at)}`, 194, 49, { align: 'right' })
   const rows = [
     ['Customer', order.customer_name], ['Phone', order.phone], ['Address', order.address || '-'], ['Product', order.product_name],
     ['Category', order.category || '-'], ['Expected delivery', formatExpectedDelivery(order.expected_delivery_date)],
@@ -106,7 +106,7 @@ export function printAdvanceReceipt(order: AdvanceOrder) {
 <div class="c" style="font-size:10px;">Not a final tax invoice</div>
 <div class="line"></div>
 <div><span class="bold">${esc(order.deposit_id)}</span></div>
-<div style="font-size:10px;color:#555;">${new Date(order.created_at).toLocaleString('en-IN')}</div>
+<div style="font-size:10px;color:#555;">${formatBillDateTime(order.created_at)}</div>
 <div class="line"></div>
 <div class="r"><span class="label">Customer</span><span class="bold">${esc(order.customer_name)}</span></div>
 <div class="r"><span class="label">Phone</span><span>${esc(order.phone)}</span></div>
