@@ -17,6 +17,8 @@ interface InventoryProduct {
   low_stock_alert: number
   price: number
   purchase_price?: number
+  gst_percent?: number
+  gstPercent?: number
   is_active: boolean
   updated_at: string
   image_url?: string
@@ -46,6 +48,7 @@ interface ProductForm {
   category: string
   price: string
   purchase_price: string
+  gst_percent: string
   stock_quantity: string
   low_stock_alert: string
   is_active: boolean
@@ -57,6 +60,7 @@ const EMPTY_FORM: ProductForm = {
   category: '',
   price: '',
   purchase_price: '',
+  gst_percent: '',
   stock_quantity: '0',
   low_stock_alert: '5',
   is_active: true,
@@ -80,8 +84,55 @@ interface InventoryLog {
   adjustment: number
   reason: string
   reference_id?: string
+  adjustment_type?: string
+  note?: string
+  order_invoice_no?: string
+  invoice_no?: string
   created_at: string
   products?: { name: string; category: string }
+}
+
+const isUuid = (val?: string | null) =>
+  Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val.trim()))
+
+const formatAuditReference = (log: InventoryLog): string => {
+  const invNo = log.order_invoice_no || log.invoice_no || (!isUuid(log.reference_id) && log.reference_id?.startsWith('INV') ? log.reference_id : null)
+  const reason = (log.reason || '').toLowerCase()
+  const adjType = (log.adjustment_type || '').toLowerCase()
+  const noteText = log.note?.trim()
+
+  if (reason === 'sale' || (log.adjustment < 0 && invNo)) {
+    if (invNo) {
+      return `Order #${invNo.replace(/^#/, '')} — stock deducted on sale`
+    }
+    return 'Order sale — stock deducted'
+  }
+
+  if (adjType === 'restock' || reason === 'restock') {
+    return noteText ? `Restock entry — ${noteText}` : 'Restock entry'
+  }
+
+  if (adjType === 'customer_return' || reason === 'return') {
+    return noteText ? `Customer return — ${noteText}` : 'Customer return'
+  }
+
+  if (adjType === 'loss_damaged' || reason === 'loss') {
+    return noteText ? `Loss / damaged stock — ${noteText}` : 'Loss / damaged stock'
+  }
+
+  if (adjType === 'reconciliation' || reason === 'manual_adjustment' || reason === 'correction') {
+    return noteText ? `Manual reconciliation — ${noteText}` : 'Manual reconciliation'
+  }
+
+  if (noteText) {
+    return noteText
+  }
+
+  if (log.reference_id && !isUuid(log.reference_id)) {
+    return log.reference_id
+  }
+
+  return '—'
 }
 
 type DatePreset = 'all' | 'today' | 'week' | 'month' | 'custom'
@@ -571,11 +622,15 @@ export default function Inventory() {
   const startEditProduct = (p: InventoryProduct) => {
     setEditingProduct(p)
     const effectivePrice = getProductPrice(p)
+    const gstRateVal = (p as any).gst_percent !== undefined && (p as any).gst_percent !== null && (p as any).gst_percent !== ''
+      ? String((p as any).gst_percent)
+      : ((p as any).gstPercent !== undefined && (p as any).gstPercent !== null && (p as any).gstPercent !== '' ? String((p as any).gstPercent) : '')
     setProductForm({
       name: p.name,
       category: p.category || '',
       price: effectivePrice > 0 ? String(effectivePrice) : (p.price ? String(p.price) : ''),
       purchase_price: p.purchase_price ? String(p.purchase_price) : '',
+      gst_percent: gstRateVal,
       stock_quantity: String(p.stock_quantity),
       low_stock_alert: String(p.low_stock_alert || 5),
       is_active: p.is_active,
@@ -601,11 +656,14 @@ export default function Inventory() {
     setSavingProduct(true)
     setProductNotice('')
     try {
+      const gstRateVal = productForm.gst_percent.trim() !== '' ? parseFloat(productForm.gst_percent) : 0
       const payload = {
         name: productForm.name.trim(),
         category: productForm.category.trim() || null,
         price: parseFloat(productForm.price) || 0,
         purchase_price: productForm.purchase_price ? parseFloat(productForm.purchase_price) : 0,
+        gst_percent: isNaN(gstRateVal) ? 0 : gstRateVal,
+        gstPercent: isNaN(gstRateVal) ? 0 : gstRateVal,
         stock_quantity: parseFloat(productForm.stock_quantity) || 0,
         low_stock_alert: parseInt(productForm.low_stock_alert) || 5,
         is_active: productForm.is_active,
@@ -776,21 +834,29 @@ export default function Inventory() {
           </div>
 
           {/* Filters & Search */}
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <div className="relative flex-1 min-w-[200px]">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
               <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search SKU name, category..."
                 className="w-full pl-9 pr-4 py-2.5 bg-white border border-[#A5D6A7]/60 rounded-xl text-sm font-bold outline-none focus:border-[#2E7D32]" />
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 w-full sm:w-auto">
               {[
                 { key: 'all', label: `All (${products.length})` },
                 { key: 'normal', label: `In Stock (${normalCount})` },
                 { key: 'low', label: `Low Stock (${lowCount})` },
                 { key: 'out', label: `Out of Stock (${outCount})` },
               ].map(f => (
-                <button key={f.key} onClick={() => setFilter(f.key as any)}
-                  className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-colors ${filter === f.key ? 'bg-[#2E7D32] text-white' : 'bg-white border border-[#A5D6A7]/60 text-[#374151] hover:bg-emerald-50'}`}>
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => setFilter(f.key as any)}
+                  className={`w-full sm:w-auto h-10 px-3 sm:px-4 py-2 flex items-center justify-center text-center rounded-xl text-xs font-black uppercase tracking-wider transition-colors ${
+                    filter === f.key
+                      ? 'bg-[#2E7D32] text-white'
+                      : 'bg-white border border-[#A5D6A7]/60 text-[#374151] hover:bg-emerald-50'
+                  }`}
+                >
                   {f.label}
                 </button>
               ))}
@@ -907,7 +973,7 @@ export default function Inventory() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[10px] font-black uppercase tracking-wider text-[#374151] mb-1.5">Selling Price (₹) *</label>
                   <input type="number" required step="0.01" min="0" value={productForm.price} onChange={e => setProductForm(f => ({...f, price: e.target.value}))}
@@ -919,7 +985,14 @@ export default function Inventory() {
                   <input type="number" step="0.01" min="0" value={productForm.purchase_price} onChange={e => setProductForm(f => ({...f, purchase_price: e.target.value}))}
                     className="w-full border border-[#A5D6A7]/60 p-2.5 rounded-xl text-sm font-bold outline-none focus:border-[#2E7D32]"
                     placeholder="0.00" />
-                  <p className="text-[10px] text-[#6B7280] mt-1">Cost price is for your records only — not used in billing.</p>
+                  <p className="text-[10px] text-[#6B7280] mt-1">Cost price is for records only.</p>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-[#374151] mb-1.5">GST Rate (%)</label>
+                  <input type="number" step="0.01" min="0" max="100" value={productForm.gst_percent} onChange={e => setProductForm(f => ({...f, gst_percent: e.target.value}))}
+                    className="w-full border border-[#A5D6A7]/60 p-2.5 rounded-xl text-sm font-bold outline-none focus:border-[#2E7D32]"
+                    placeholder="0" />
+                  <p className="text-[10px] text-[#6B7280] mt-1">Optional per-item GST.</p>
                 </div>
               </div>
 
@@ -1093,10 +1166,10 @@ export default function Inventory() {
           : 'SET EXACT COUNT (RECONCILIATION)'
 
         const notePlaceholder =
-          adjustType === 'restock' ? 'e.g. Received new stock shipment / batch delivery'
-          : adjustType === 'customer_return' ? 'e.g. Customer returned damaged or unwanted product'
-          : adjustType === 'loss_damaged' ? 'e.g. Spoiled during storage / broken in transit'
-          : 'e.g. Physical count verified during stock audit'
+          adjustType === 'restock' ? 'e.g. Received new stock shipment'
+          : adjustType === 'customer_return' ? 'e.g. Customer return or exchange'
+          : adjustType === 'loss_damaged' ? 'e.g. Damaged or expired stock'
+          : 'e.g. Physical count verified during audit'
 
         const confirmLabel = saving ? 'Saving...'
           : adjustType === 'restock' ? `Confirm Restock (+${qtyNum} Units)`
@@ -1368,8 +1441,8 @@ export default function Inventory() {
                             <td className="px-3 py-2 text-right font-black text-[#111111]">
                               {log.new_quantity}
                             </td>
-                            <td className="px-3 py-2 text-[#6B7280] truncate max-w-[180px]">
-                              {log.reference_id || '—'}
+                            <td className="px-3 py-2 text-[#6B7280] font-medium" title={formatAuditReference(log)}>
+                              {formatAuditReference(log)}
                             </td>
                           </tr>
                         )

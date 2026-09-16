@@ -49,12 +49,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           l.reference_id,
           l.created_by,
           l.created_at,
+          o.invoice_no AS order_invoice_no,
           json_build_object(
             'name', COALESCE(p.name, '—'),
             'category', COALESCE(p.category, '—')
           ) AS products
         FROM public.inventory_logs l
         LEFT JOIN public.products p ON l.product_id = p.id
+        LEFT JOIN public.orders o ON (
+          l.reference_id IS NOT NULL AND (
+            l.reference_id = o.id::text OR 
+            l.reference_id = o.invoice_no
+          )
+        )
         WHERE
           (${fromStr}::timestamptz IS NULL OR l.created_at >= ${fromStr}::timestamptz)
           AND (${toStr}::timestamptz IS NULL OR l.created_at <= ${toStr}::timestamptz)

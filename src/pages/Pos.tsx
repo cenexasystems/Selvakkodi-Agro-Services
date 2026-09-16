@@ -30,7 +30,7 @@ import {
   formatInvoiceNo,
 } from '../lib/retail'
 import { PAYMENT_METHODS } from '../lib/paymentMethods'
-import { buildProfessionalWhatsAppMessage, buildAdvanceDepositWhatsAppMessage } from '../lib/whatsappMessage'
+import { buildProfessionalWhatsAppMessage, buildAdvanceDepositWhatsAppMessage, publicInvoiceUrl } from '../lib/whatsappMessage'
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { getProductImage, onImgError } from '../lib/productImages'
 import { normalizePhone, toWhatsAppUrl } from '../lib/phone'
@@ -93,7 +93,8 @@ const makePosItem = (p: Product, qty?: number): PosItem => {
   const basePrice = p.offerPrice || p.price
   const q = Math.max(1, Math.round(qty ?? 1))
   const packLabel = p.predefinedOptions[0]?.label ?? p.unitLabel
-  return { ...p, qty: q, selectedUnit: packLabel, basePrice, lineTotal: calculateLineTotal(q, p.unitType, p.baseQuantity, basePrice) }
+  const gstPercent = p.gstPercent !== undefined ? Number(p.gstPercent) : (Number((p as any).gst_percent) || 0)
+  return { ...p, qty: q, selectedUnit: packLabel, basePrice, gstPercent, lineTotal: calculateLineTotal(q, p.unitType, p.baseQuantity, basePrice) }
 }
 
 const recalc = (item: PosItem, nextQty: number): PosItem => {
@@ -253,11 +254,29 @@ export default function Pos(props: PosProps = {}) {
 
   const discountedSubtotal = Math.max(0, subtotal - couponDiscount - manualDiscountAmount)
 
-  const totalGst = billGstEnabled
+  // Per-product GST: calculated directly from items that have a stored gstPercent > 0
+  const productGstTotal = items.reduce((sum, item) => {
+    const rate = Math.max(0, Number(item.gstPercent ?? (item as any).gst_percent ?? 0))
+    return sum + (rate > 0 ? Math.round((item.lineTotal * (rate / 100)) * 100) / 100 : 0)
+  }, 0)
+
+  // Global GST toggle logic: independent global toggle on the bill
+  // If products don't have per-product GST, global percentage applies to them without double-taxing
+  const nonProductGstSubtotal = items
+    .filter(i => !(Number(i.gstPercent ?? (i as any).gst_percent ?? 0) > 0))
+    .reduce((s, i) => s + i.lineTotal, 0)
+
+  const globalGstBase = subtotal > 0
+    ? (productGstTotal > 0 ? Math.max(0, discountedSubtotal * (nonProductGstSubtotal / subtotal)) : discountedSubtotal)
+    : 0
+
+  const globalGst = billGstEnabled
     ? (gstType === 'percent'
-      ? Math.max(0, Math.round((discountedSubtotal * (Math.max(0, Number(gstInput) || 0) / 100)) * 100) / 100)
+      ? Math.max(0, Math.round((globalGstBase * (Math.max(0, Number(gstInput) || 0) / 100)) * 100) / 100)
       : Math.max(0, Number(gstInput) || 0))
     : 0
+
+  const totalGst = Math.round((productGstTotal + globalGst) * 100) / 100
   const total = Math.max(0, discountedSubtotal + (Number(shipping || 0) || 0) + totalGst)
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -637,7 +656,7 @@ export default function Pos(props: PosProps = {}) {
     ? Number(cashReceived) - total : null
 
   const sendPosWhatsApp = (inv: InvoiceSnap) => {
-    const invoiceUrl = `${window.location.origin}/invoice/${encodeURIComponent(inv.invoiceNo)}`
+    const invoiceUrl = publicInvoiceUrl(inv.invoiceNo)
     const message = buildProfessionalWhatsAppMessage({
       customerName: inv.customerName,
       phone: inv.phone,
@@ -721,6 +740,8 @@ export default function Pos(props: PosProps = {}) {
       line_total: item.lineTotal,
       price: item.price,
       offerPrice: item.offerPrice,
+      gst_percent: Number(item.gstPercent ?? (item as any).gst_percent ?? 0),
+      gstPercent: Number(item.gstPercent ?? (item as any).gst_percent ?? 0),
     }))
 
     return (
@@ -845,6 +866,7 @@ export default function Pos(props: PosProps = {}) {
             manualDiscountAmount={invoice.manualDiscountAmount || 0}
             gstAmount={invoice.gstAmount || 0}
             couponCode={invoice.couponCode}
+            paymentMode={invoice.paymentMode || invoice.paymentMethod || 'Cash'}
           />
         </div>
       </div>
@@ -941,7 +963,7 @@ export default function Pos(props: PosProps = {}) {
         <div className="flex-[2.1] flex flex-col gap-6 lg:overflow-y-auto lg:pb-4 hide-scrollbar">
 
           {/* Customer Details Card */}
-          <div className="bg-white rounded-2xl border border-[#A5D6A7]/40 shadow-sm p-4 md:p-5">
+          <div className="bg-white rounded-2xl border border-[#A5D6A7]/40 shadow-sm p-4 md:p-5 relative overflow-hidden">
             <h3 className="text-[18px] md:text-[14px] font-black text-[#111111] flex items-center gap-2 mb-4">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#2E7D32]"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
               Customer Details
@@ -987,14 +1009,23 @@ export default function Pos(props: PosProps = {}) {
                   className="w-full h-12 px-4 bg-white border border-[#A5D6A7]/60 rounded-xl focus:outline-none focus:border-[#2E7D32] text-[16px] md:text-[13px] font-bold text-[#111111] placeholder:text-gray-400 placeholder:font-medium"
                 />
               </div>
-              <div>
+              <div className="w-full min-w-0">
                 <label className="block text-[13px] md:text-[10px] font-black text-[#374151] tracking-wider uppercase mb-1.5">Billing Date (Optional)</label>
                 <input
                   id="pos-billing-date"
                   type="date"
                   value={billingDate}
                   onChange={e => setBillingDate(e.target.value)}
-                  className="w-full h-12 px-4 bg-white border border-[#A5D6A7]/60 rounded-xl focus:outline-none focus:border-[#2E7D32] text-[16px] md:text-[13px] font-bold text-[#111111]"
+                  className="w-full h-12 max-h-12 px-4 bg-white border border-[#A5D6A7]/60 rounded-xl focus:outline-none focus:border-[#2E7D32] text-[16px] md:text-[13px] font-bold text-[#111111] box-border"
+                  style={{
+                    boxSizing: 'border-box',
+                    WebkitAppearance: 'none',
+                    appearance: 'none',
+                    height: '48px',
+                    maxHeight: '48px',
+                    width: '100%',
+                    maxWidth: '100%',
+                  }}
                 />
                 <p className="mt-1 text-[10px] text-gray-400 font-medium">Leave blank to use today's date &amp; time</p>
               </div>
@@ -1129,8 +1160,13 @@ export default function Pos(props: PosProps = {}) {
                       </div>
                       <div>
                         <p className="text-[13px] font-black uppercase tracking-wider text-[#374151] mb-1">Total</p>
-                        <div className="h-12 rounded-xl border border-[#A5D6A7]/30 bg-white px-3 flex items-center justify-end text-[16px] font-black text-[#2E7D32]">
-                          {formatCurrency(item.lineTotal)}
+                        <div className="h-12 rounded-xl border border-[#A5D6A7]/30 bg-white px-3 flex flex-col justify-center items-end text-[16px] font-black text-[#2E7D32]">
+                          <span>{formatCurrency(item.lineTotal)}</span>
+                          {Number(item.gstPercent ?? (item as any).gst_percent ?? 0) > 0 && (
+                            <span className="text-[10px] font-bold text-[#6B7280]">
+                              + {formatCurrency(Math.round((item.lineTotal * Number(item.gstPercent ?? (item as any).gst_percent) / 100) * 100) / 100)} GST ({item.gstPercent ?? (item as any).gst_percent}%)
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1170,6 +1206,11 @@ export default function Pos(props: PosProps = {}) {
                       {item.source !== 'manual' && (
                         <span className="hidden sm:inline-flex px-2 py-0.5 rounded border border-[#2E7D32]/20 text-[#2E7D32] text-[9px] font-black tracking-wider uppercase shrink-0 bg-[#2E7D32]/5">
                           CATALOG
+                        </span>
+                      )}
+                      {Number(item.gstPercent ?? (item as any).gst_percent ?? 0) > 0 && (
+                        <span className="hidden sm:inline-flex px-1.5 py-0.5 rounded border border-amber-300 text-amber-800 text-[9px] font-black tracking-wider uppercase shrink-0 bg-amber-50">
+                          GST {item.gstPercent ?? (item as any).gst_percent}%
                         </span>
                       )}
                     </div>
@@ -1265,12 +1306,19 @@ export default function Pos(props: PosProps = {}) {
                 </div>
 {items.length > 0 && (
                   <div className="px-3 py-2 bg-[#FAFAFA] space-y-1 border-b border-[#A5D6A7]/40 max-h-[80px] overflow-y-auto">
-                    {items.map(item => (
-                <div key={item.id} className="flex justify-between text-[#111111] text-[11px]">
-                        <span className="truncate pr-2">{item.qty}x {item.name}</span>
-                        <span>{formatCurrency(item.lineTotal)}</span>
-                      </div>
-                    ))}
+                    {items.map(item => {
+                      const rate = Number(item.gstPercent ?? (item as any).gst_percent ?? 0)
+                      const itemGst = rate > 0 ? Math.round((item.lineTotal * (rate / 100)) * 100) / 100 : 0
+                      return (
+                        <div key={item.id} className="flex justify-between text-[#111111] text-[11px]">
+                          <span className="truncate pr-2">
+                            {item.qty}x {item.name}
+                            {itemGst > 0 && <span className="ml-1 text-[10px] text-[#2E7D32] font-semibold">(+{formatCurrency(itemGst)} GST)</span>}
+                          </span>
+                          <span>{formatCurrency(item.lineTotal)}</span>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -1392,7 +1440,7 @@ export default function Pos(props: PosProps = {}) {
                   <span className="text-[12px] font-black text-[#111111]">{formatCurrency(subtotal)}</span>
                 </div>
 
-                {billGstEnabled && totalGst > 0 && (
+                {totalGst > 0 && (
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-black text-[#374151]">GST Amount</span>
                     <span className="text-[12px] font-black text-[#111111]">{formatCurrency(totalGst)}</span>
