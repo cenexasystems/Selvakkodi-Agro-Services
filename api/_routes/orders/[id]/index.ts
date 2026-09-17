@@ -99,7 +99,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const customerName = b.customerName ?? b.customer_name;
       const phone = b.phone;
       const address = b.address;
-      const billingDate = b.billingDate ?? b.billing_date ? new Date(b.billingDate ?? b.billing_date).toISOString() : null;
+      let billingDate: string | null = null;
+      const rawBillingDate = b.billingDate ?? b.billing_date;
+      if (rawBillingDate && String(rawBillingDate).trim()) {
+        const trimmedDate = String(rawBillingDate).trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmedDate)) {
+          const [y, m, d] = trimmedDate.split('-').map(Number);
+          const now = new Date();
+          billingDate = new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds()).toISOString();
+        } else {
+          const parsed = new Date(trimmedDate);
+          billingDate = isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+        }
+      }
       const paymentMode = b.paymentMode ?? b.payment_mode ?? b.paymentMethod ?? b.payment_method;
 
       await sql`

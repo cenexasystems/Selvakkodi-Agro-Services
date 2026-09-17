@@ -1,4 +1,4 @@
-import { formatInvoiceNo } from './retail'
+import { formatInvoiceNo, formatBillDateTime } from './retail'
 
 export type WhatsAppLineItem = {
   name: string
@@ -95,7 +95,7 @@ Thank you for shopping with Selvakkodi Agro Service! We truly appreciate your or
 
 🧾 *INVOICE DETAILS*
 📌 *Invoice No:* #${formattedNo}
-${input.invoiceDate ? `📅 *Date:* ${new Date(input.invoiceDate).toLocaleDateString('en-IN')}\n` : ''}${input.paymentMode ? `💳 *Payment Mode:* ${input.paymentMode}\n` : ''}
+${input.invoiceDate ? `📅 *Date:* ${formatBillDateTime(input.invoiceDate)}\n` : ''}${input.paymentMode ? `💳 *Payment Mode:* ${input.paymentMode}\n` : ''}
 ${itemsText ? `📦 *ITEMS ORDERED:*\n${itemsText}\n\n${totalsText}\n` : input.total !== undefined ? `💰 *Total Amount:* ₹${total.toFixed(2)}\n` : ''}
 📄 *View & Download Digital Invoice / PDF:*
 👉 ${invoiceUrl}

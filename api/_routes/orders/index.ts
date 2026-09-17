@@ -145,7 +145,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const splitDetails = (typeof b.splitDetails === 'object' && b.splitDetails !== null) ? b.splitDetails : {};
     const remarks = b.remarks ? String(b.remarks).trim() : null;
     const referenceNumber = b.referenceNumber || b.reference_number ? String(b.referenceNumber || b.reference_number).trim() : null;
-    const billingDate = b.billingDate || b.billing_date ? new Date(b.billingDate || b.billing_date).toISOString() : null;
+    let billingDate: string | null = null;
+    const rawBillingDate = b.billingDate || b.billing_date;
+    if (rawBillingDate && String(rawBillingDate).trim()) {
+      const trimmedDate = String(rawBillingDate).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmedDate)) {
+        const [y, m, d] = trimmedDate.split('-').map(Number);
+        const now = new Date();
+        billingDate = new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds()).toISOString();
+      } else {
+        const parsed = new Date(trimmedDate);
+        billingDate = isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+      }
+    }
     const gstEnabled = Boolean(b.gstEnabled ?? b.gst_enabled);
     const userId = authUser ? authUser.id : (b.userId || b.user_id || null);
 
@@ -338,18 +350,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const invoiceNo = result.invoiceNo || result.invoice_no;
       const createdAt = result.createdAt || result.created_at || new Date().toISOString();
 
-      // 9. Update additional POS order metadata if provided
-      if (remarks || referenceNumber || billingDate) {
-        await sql`
-          UPDATE public.orders
-          SET
-            remarks = COALESCE(${remarks}, remarks),
-            reference_number = COALESCE(${referenceNumber}, reference_number),
-            billing_date = COALESCE(${billingDate}::timestamptz, billing_date),
-            updated_at = NOW()
-          WHERE id = ${orderId}
-        `;
-      }
+      // 9. Update additional POS order metadata (remarks, reference number, billing date)
+      await sql`
+        UPDATE public.orders
+        SET
+          remarks = COALESCE(${remarks}, remarks),
+          reference_number = COALESCE(${referenceNumber}, reference_number),
+          billing_date = COALESCE(${billingDate}::timestamptz, NOW()),
+          updated_at = NOW()
+        WHERE id = ${orderId}
+      `;
 
       // 10. Fetch complete order record to return
       const createdOrderRows = await sql`

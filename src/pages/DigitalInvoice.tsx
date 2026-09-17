@@ -100,7 +100,7 @@ export default function DigitalInvoice() {
       customerName: invoice.customer_name,
       phone: invoice.phone,
       invoiceNumber: invoice.invoice_no,
-      invoiceDate: invoice.created_at,
+      invoiceDate: invoice.billing_date || invoice.created_at,
       items,
       subtotal,
       couponDiscount: invoice.discount_amount,
@@ -115,7 +115,7 @@ export default function DigitalInvoice() {
       ? await invoicePdfFileFromElement(invoiceElementRef.current, invoice.invoice_no)
       : invoicePdfFile({
       invoiceNo: invoice.invoice_no,
-      date: invoice.created_at,
+      date: invoice.billing_date || invoice.created_at,
       customerName: invoice.customer_name,
       phone: invoice.phone,
       address: invoice.address,
@@ -161,7 +161,7 @@ export default function DigitalInvoice() {
     const subtotal = invoice.total - (invoice.delivery_charge || 0) + (invoice.discount_amount || 0)
     printThermalReceipt({
       invoiceNo: invoice.invoice_no,
-      date: invoice.created_at,
+      date: invoice.billing_date || invoice.created_at,
       customerName: invoice.customer_name,
       phone: invoice.phone,
       items: (invoice.items || []).map((item: Record<string, unknown>) => ({
@@ -206,7 +206,7 @@ export default function DigitalInvoice() {
         <div ref={invoiceElementRef} className="bg-white shadow-xl rounded-2xl overflow-hidden print:shadow-none print:rounded-none border border-sand/20 print:border-none">
           <Invoice
             invoiceNo={invoice.invoice_no}
-            date={invoice.created_at}
+            date={invoice.billing_date || invoice.created_at}
             customerName={invoice.customer_name}
             phone={invoice.phone}
             address={invoice.address}

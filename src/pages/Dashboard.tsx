@@ -50,7 +50,7 @@ import { notificationService, type AppNotification } from '../services/notificat
 import { createProduct, updateProduct, deleteProduct } from '../services/productService'
 import { uploadProductImage } from '../lib/storage'
 import { formatCurrency, normalizeOrderMode, normalizeUnitType, toNumber, type UnitType } from '../lib/retail'
-import { normalizeStructuredOrderItem, formatInvoiceNo } from '../lib/retail'
+import { normalizeStructuredOrderItem, formatInvoiceNo, formatBillDateTime } from '../lib/retail'
 import { Invoice } from '../components/Invoice'
 import Expenses from './Expenses'
 import Attendance from './Attendance'
@@ -82,7 +82,7 @@ type DashboardOrder = {
   id: string; invoice_no: string; customer_name: string; phone: string; address: string
   created_at: string; total: number; status: string; order_mode: string; order_type: string; user_id: string | null; items: unknown
   coupon_code: string; discount_amount: number; manual_discount_amount: number; delivery_charge: number
-  total_gst: number; payment_mode: string; payment_method?: string; invoice_pdf_url: string; remarks?: string; reference_number?: string
+  total_gst: number; payment_mode: string; payment_method?: string; invoice_pdf_url: string; remarks?: string; reference_number?: string; billing_date?: string
 }
 type DashboardOrderItem = { order_id: string; product_name: string; category?: string; quantity: number; line_total: number; is_manual?: boolean | null }
 type DashboardCoupon = {
@@ -432,6 +432,7 @@ export default function Dashboard() {
     invoice_pdf_url: String(row.invoice_pdf_url || ''),
     remarks: row.remarks ? String(row.remarks) : undefined,
     reference_number: row.reference_number ? String(row.reference_number) : undefined,
+    billing_date: row.billing_date ? String(row.billing_date) : undefined,
   })
 
   const handleAdvanceOrderCompleted = useCallback((advance: AdvanceOrder) => {
@@ -969,7 +970,7 @@ export default function Dashboard() {
       customerName: order.customer_name,
       phone: order.phone,
       invoiceNumber: order.invoice_no || order.id,
-      invoiceDate: order.created_at,
+      invoiceDate: order.billing_date || order.created_at,
       items: items.map(item => ({
         name: item.name,
         qty: item.quantity,
@@ -994,7 +995,7 @@ export default function Dashboard() {
 
     printThermalReceipt({
       invoiceNo: order.invoice_no || order.id,
-      date: order.created_at,
+      date: order.billing_date || order.created_at,
       customerName: order.customer_name,
       phone: order.phone,
       items: (preview.items as Array<{
@@ -1040,7 +1041,7 @@ export default function Dashboard() {
     if (!preview) { alert('This order has no invoice details available.'); return }
     const file = invoicePdfFile({
       invoiceNo: order.invoice_no || order.id,
-      date: order.created_at,
+      date: order.billing_date || order.created_at,
       customerName: order.customer_name,
       phone: order.phone,
       address: order.address,
@@ -2000,7 +2001,7 @@ export default function Dashboard() {
                           customerName: order.customer_name,
                           phone: order.phone,
                           invoiceNumber: formatInvoiceNo(order.invoice_no || order.id),
-                          invoiceDate: order.created_at,
+                          invoiceDate: order.billing_date || order.created_at,
                           items: normalizedItems.map(item => ({
                             name: item.name,
                             qty: item.quantity,
@@ -2025,8 +2026,7 @@ export default function Dashboard() {
                               </td>
                               <td className="px-4 py-3 font-black text-[#111111]">{formatCurrency(getOrderTotal(order))}</td>
                               <td className="px-4 py-3 text-[#7A846F] whitespace-nowrap text-[11px]">
-                                <div>{new Date(order.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
-                                <div className="text-[10px]">{new Date(order.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
+                                <div>{formatBillDateTime(order.billing_date || order.created_at)}</div>
                               </td>
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-2">
@@ -2915,7 +2915,7 @@ export default function Dashboard() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-[13px] font-black text-[#111111] break-words">{formatInvoiceNo(o.invoice_no)}</p>
-                          <p className="text-[13px] text-[#374151]">{new Date(o.created_at).toLocaleDateString('en-IN')}</p>
+                          <p className="text-[13px] text-[#374151]">{formatBillDateTime(o.billing_date || o.created_at)}</p>
                         </div>
                         <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ${billTypeClass}`}>{billTypeLabel}</span>
                       </div>
@@ -3014,7 +3014,7 @@ export default function Dashboard() {
                             {o.delivery_charge > 0 ? <span className="font-bold text-[#111111]">{formatCurrency(o.delivery_charge)}</span> : <span className="text-[#9BAB9A]">—</span>}
                           </td>
                           <td className="whitespace-nowrap px-2 py-3 text-[11px] font-bold text-[#111111]">{formatCurrency(getOrderTotal(o))}</td>
-                          <td className="whitespace-nowrap px-2 py-3 text-[11px] text-[#374151]">{new Date(o.created_at).toLocaleDateString('en-IN')}</td>
+                          <td className="whitespace-nowrap px-2 py-3 text-[11px] text-[#374151]">{formatBillDateTime(o.billing_date || o.created_at)}</td>
                           <td className="px-2 py-3">
                             <div className="flex items-center justify-center gap-1.5">
                               <select value={normalizeStatus(o.status)} onChange={e => void updateOrderStatus(o.id, e.target.value)}
@@ -3687,7 +3687,7 @@ export default function Dashboard() {
                 <div className="mx-auto max-w-3xl overflow-hidden rounded-xl bg-white shadow-sm">
                   <Invoice
                     invoiceNo={formatInvoiceNo(invoicePreviewOrder.invoice_no || invoicePreviewOrder.id)}
-                    date={invoicePreviewOrder.created_at}
+                    date={invoicePreviewOrder.billing_date || invoicePreviewOrder.created_at}
                     customerName={invoicePreviewOrder.customer_name}
                     phone={displayPhone(invoicePreviewOrder.phone)}
                     address={invoicePreviewOrder.address}

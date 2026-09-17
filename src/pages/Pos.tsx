@@ -538,7 +538,16 @@ export default function Pos(props: PosProps = {}) {
     try {
       const paymentMode = ordermode === 'online' ? 'online' : paymentType
       const effectiveBillingDate = billingDate.trim()
-        ? new Date(billingDate).toISOString()
+        ? (/^\d{4}-\d{2}-\d{2}$/.test(billingDate.trim())
+            ? (() => {
+                const [y, m, d] = billingDate.trim().split('-').map(Number)
+                const now = new Date()
+                return new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds()).toISOString()
+              })()
+            : (() => {
+                const parsed = new Date(billingDate.trim())
+                return isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString()
+              })())
         : new Date().toISOString()
 
       const created = await createOrderWithStock({
@@ -584,7 +593,7 @@ export default function Pos(props: PosProps = {}) {
         id: created.orderId,
         invoiceNo: created.invoiceNo,
         orderType: getOrderType(),
-        date: billingDate.trim() ? new Date(billingDate).toISOString() : created.createdAt,
+        date: effectiveBillingDate,
         items: [...items],
         subtotal,
         shipping: Number(shipping || 0),
@@ -661,6 +670,7 @@ export default function Pos(props: PosProps = {}) {
       customerName: inv.customerName,
       phone: inv.phone,
       invoiceNumber: inv.invoiceNo,
+      invoiceDate: inv.date,
       invoiceUrl,
       paymentMode: inv.paymentMode || 'POS',
       items: inv.items.map((item) => ({
@@ -1009,7 +1019,7 @@ export default function Pos(props: PosProps = {}) {
                   className="w-full h-12 px-4 bg-white border border-[#A5D6A7]/60 rounded-xl focus:outline-none focus:border-[#2E7D32] text-[16px] md:text-[13px] font-bold text-[#111111] placeholder:text-gray-400 placeholder:font-medium"
                 />
               </div>
-              <div className="w-full min-w-0">
+              <div className="w-full min-w-0 md:col-span-2">
                 <label className="block text-[13px] md:text-[10px] font-black text-[#374151] tracking-wider uppercase mb-1.5">Billing Date (Optional)</label>
                 <input
                   id="pos-billing-date"
@@ -1303,6 +1313,38 @@ export default function Pos(props: PosProps = {}) {
                       className={`w-full h-8 px-2 bg-white border rounded-lg text-[12px] font-bold text-[#111111] focus:outline-none ${customer.phone && !normalizePhone(customer.phone) ? 'border-red-400 bg-red-50' : 'border-[#A5D6A7]/60 focus:border-[#2E7D32]'}`}
                     />
                   </div>
+                </div>
+                <div className="grid grid-cols-2 gap-0 border-b border-[#A5D6A7]/40">
+                  <div className="p-2 border-r border-[#A5D6A7]/40">
+                    <span className="text-[10px] text-[#374151] uppercase block mb-0.5">Remarks (Internal)</span>
+                    <input
+                      type="text"
+                      value={remarks}
+                      onChange={e => setRemarks(e.target.value)}
+                      placeholder="Optional remarks"
+                      className="w-full h-8 px-2 bg-white border border-[#A5D6A7]/60 rounded-lg text-[12px] font-bold text-[#111111] focus:outline-none focus:border-[#2E7D32]"
+                    />
+                  </div>
+                  <div className="p-2">
+                    <span className="text-[10px] text-[#374151] uppercase block mb-0.5">Reference Number</span>
+                    <input
+                      type="text"
+                      value={referenceNumber}
+                      onChange={e => setReferenceNumber(e.target.value)}
+                      placeholder="Optional ref no."
+                      className="w-full h-8 px-2 bg-white border border-[#A5D6A7]/60 rounded-lg text-[12px] font-bold text-[#111111] focus:outline-none focus:border-[#2E7D32]"
+                    />
+                  </div>
+                </div>
+                <div className="p-2 border-b border-[#A5D6A7]/40 bg-white">
+                  <span className="text-[10px] text-[#374151] uppercase block mb-0.5">Billing Date (Optional)</span>
+                  <input
+                    type="date"
+                    value={billingDate}
+                    onChange={e => setBillingDate(e.target.value)}
+                    className="w-full h-8 px-2 bg-white border border-[#A5D6A7]/60 rounded-lg text-[12px] font-bold text-[#111111] focus:outline-none focus:border-[#2E7D32]"
+                  />
+                  <p className="mt-0.5 text-[9px] text-gray-400 font-medium">Leave blank to use today's date &amp; time</p>
                 </div>
 {items.length > 0 && (
                   <div className="px-3 py-2 bg-[#FAFAFA] space-y-1 border-b border-[#A5D6A7]/40 max-h-[80px] overflow-y-auto">

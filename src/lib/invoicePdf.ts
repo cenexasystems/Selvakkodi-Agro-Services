@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf'
 import html2canvas from 'html2canvas'
 import { BRAND_ADDRESS, BRAND_EMAIL, BRAND_EN, BRAND_OWNER, BRAND_PHONE_DISPLAY } from './brand'
-import { formatCurrency, formatQuantityDisplay, normalizeStructuredOrderItem, formatInvoiceNo } from './retail'
+import { formatCurrency, formatQuantityDisplay, normalizeStructuredOrderItem, formatInvoiceNo, formatBillDateTime } from './retail'
 import { LOGO_BASE64 } from './logoBase64'
 
 export type InvoicePdfData = {
@@ -67,7 +67,7 @@ export function createInvoicePdf(data: InvoicePdfData): Blob {
   doc.setFont('helvetica', 'normal')
   doc.text(BRAND_ADDRESS, left + 26, y + 14, { maxWidth: 95 })
   doc.text(`Phone: ${BRAND_PHONE_DISPLAY}  |  Email: ${BRAND_EMAIL}`, left + 26, y + 23)
-  doc.text(`Date: ${new Date(data.date).toLocaleDateString('en-IN')}`, right, y + 2, { align: 'right' })
+  doc.text(`Date: ${formatBillDateTime(data.date)}`, right, y + 2, { align: 'right' })
   doc.text(`Payment: ${data.paymentMode || 'POS'}`, right, y + 7, { align: 'right' })
   y += 30
 
