@@ -1,13 +1,13 @@
+'use client'
+
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Invoice } from '../components/Invoice'
 import { Printer, ArrowLeft, MessageCircle } from 'lucide-react'
 import { printThermalReceipt } from '../lib/thermalPrint'
-import { invoicePdfFile, invoicePdfFileFromElement } from '../lib/invoicePdf'
-import { uploadInvoicePdf } from '../lib/storage'
+import { invoicePdfFileFromElement } from '../lib/invoicePdf'
 import { normalizeStructuredOrderItem } from '../lib/retail'
 import { buildProfessionalWhatsAppMessage } from '../lib/whatsappMessage'
-import { toWhatsAppUrl } from '../lib/phone'
 import { orderService } from '../services/orderService'
 
 export default function DigitalInvoice() {
@@ -20,18 +20,32 @@ export default function DigitalInvoice() {
   const invoiceElementRef = useRef<HTMLDivElement>(null)
 
   const handleBack = () => {
-    if (window.history.length > 1) {
+    if (window.history.state && typeof window.history.state.idx === 'number' && window.history.state.idx > 0) {
       navigate(-1)
-    } else {
-      navigate('/dashboard')
+      return
     }
+    if (window.opener && !window.opener.closed) {
+      window.close()
+    }
+    navigate('/dashboard')
   }
 
   useEffect(() => {
     const loadInvoice = async () => {
       try {
         const identifier = decodeURIComponent(id || '').trim()
-        const invoiceData = await orderService.getOrderById(identifier, true)
+        let invoiceData: any = null
+        try {
+          invoiceData = await orderService.getOrderById(identifier, true)
+        } catch (firstErr) {
+          // Fallback: If formatted with INV (e.g. INV10000066), try stripped numeric/clean ID
+          const clean = identifier.replace(/^[#\s]*inv[-_\s]*/i, '').trim()
+          if (clean && clean !== identifier) {
+            invoiceData = await orderService.getOrderById(clean, true)
+          } else {
+            throw firstErr
+          }
+        }
         if (!invoiceData) {
           throw new Error('Invoice not found')
         }
@@ -87,75 +101,57 @@ export default function DigitalInvoice() {
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
-  const shareViaWhatsApp = async () => {
+  const gstPercent = invoice.gst_percent ?? invoice.gstPercent ?? invoice.gst_rate
+
+  const whatsappUrl = (() => {
+    if (!invoice) return ''
+
+    // 1. Format phone number in international format for wa.me
+    const rawPhone = String(invoice.phone || invoice.customer_phone || '').trim()
+    const cleanDigits = rawPhone.replace(/\D/g, '')
+    let phoneNumber = ''
+    if (cleanDigits.length === 10 && /^[6-9]/.test(cleanDigits)) {
+      phoneNumber = `91${cleanDigits}`
+    } else if (cleanDigits.length === 11 && cleanDigits.startsWith('0')) {
+      phoneNumber = `91${cleanDigits.slice(1)}`
+    } else if (cleanDigits.length >= 10) {
+      phoneNumber = cleanDigits
+    }
+
+    // 2. Build items list and message synchronously from actual invoice data
     const items = invoiceItems.map((item: ReturnType<typeof normalizeStructuredOrderItem>) => ({
-      name: item.name,
-      qty: item.quantity,
-      unit: item.unit,
+      name: item.name || 'Item',
+      qty: item.quantity || 1,
+      unit: item.unit || 'piece',
       unitType: item.unit_type,
-      rate: item.base_price,
-      lineTotal: item.line_total,
+      rate: item.base_price || 0,
+      lineTotal: item.line_total || 0,
     }))
+
     const message = buildProfessionalWhatsAppMessage({
-      customerName: invoice.customer_name,
-      phone: invoice.phone,
-      invoiceNumber: invoice.invoice_no,
-      invoiceDate: invoice.billing_date || invoice.created_at,
+      customerName: invoice.customer_name || 'Valued Customer',
+      phone: invoice.phone || '',
+      invoiceNumber: invoice.invoice_no || String(id || ''),
+      invoiceId: invoice.id,
+      orderId: invoice.id,
+      invoiceDate: invoice.billing_date || invoice.created_at || new Date().toISOString(),
       items,
       subtotal,
       couponDiscount: invoice.discount_amount,
       manualDiscountAmount: invoice.manual_discount_amount,
       shipping: invoice.delivery_charge,
       gstAmount: invoice.total_gst || invoice.gst_amount || 0,
+      gstPercent,
       total: invoice.total,
       paymentMode: invoice.payment_mode || invoice.payment_method,
+      invoiceUrl: typeof window !== 'undefined' ? window.location.href : '',
     })
 
-    const file = invoiceElementRef.current
-      ? await invoicePdfFileFromElement(invoiceElementRef.current, invoice.invoice_no)
-      : invoicePdfFile({
-      invoiceNo: invoice.invoice_no,
-      date: invoice.billing_date || invoice.created_at,
-      customerName: invoice.customer_name,
-      phone: invoice.phone,
-      address: invoice.address,
-      items: invoiceItems as unknown as Array<Record<string, unknown>>,
-      subtotal,
-      shipping: Number(invoice.delivery_charge || 0),
-      total: Number(invoice.total || 0),
-      discountAmount: Number(invoice.discount_amount || 0),
-      manualDiscountAmount: Number(invoice.manual_discount_amount || 0),
-      gstAmount: Number(invoice.total_gst || invoice.gst_amount || 0),
-      couponCode: invoice.coupon_code || undefined,
-      paymentMode: invoice.payment_mode || invoice.payment_method || undefined,
-      })
-
-    let downloadLink = ''
-    try {
-      downloadLink = await uploadInvoicePdf(file, invoice.invoice_no)
-    } catch (err) {
-      console.warn('Failed to upload invoice PDF:', err)
-    }
-
-    const whatsappMessage = downloadLink
-      ? `${message}\n\n📄 Download Invoice: ${downloadLink}`
-      : `${message}\n\nThe PDF was downloaded. Please attach it in this chat before sending.`
-
-    if (navigator.share && navigator.canShare?.({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: `Invoice ${invoice.invoice_no}`, text: whatsappMessage })
-        return
-      } catch { /* fall through */ }
-    }
-
-    const downloadUrl = URL.createObjectURL(file)
-    const link = document.createElement('a')
-    link.href = downloadUrl
-    link.download = file.name
-    link.click()
-    setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000)
-    window.open(toWhatsAppUrl(invoice.phone, whatsappMessage), '_blank', 'noopener,noreferrer')
-  }
+    // 3. Build valid wa.me link: https://wa.me/<phone_number>?text=<encoded_message>
+    return phoneNumber
+      ? `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`
+  })()
 
   const printReceipt = () => {
     const subtotal = invoice.total - (invoice.delivery_charge || 0) + (invoice.discount_amount || 0)
@@ -175,6 +171,7 @@ export default function DigitalInvoice() {
       shipping: invoice.delivery_charge || 0,
       couponDiscount: invoice.discount_amount || 0,
       totalGst: invoice.total_gst || invoice.gst_amount || 0,
+      gstPercent,
       total: invoice.total > 0 ? invoice.total : (subtotal + (invoice.delivery_charge || 0) + (invoice.total_gst || invoice.gst_amount || 0) - (invoice.discount_amount || 0) - (invoice.manual_discount_amount || 0))
     })
   }
@@ -193,12 +190,14 @@ export default function DigitalInvoice() {
           >
             <Printer size={15} /> PDF
           </button>
-          <button
-            onClick={shareViaWhatsApp}
-            className="flex items-center gap-1.5 sm:gap-2 bg-green-500 text-white px-3.5 sm:px-5 py-2 rounded-full font-bold text-xs sm:text-sm shadow-md hover:bg-green-600 transition-colors shrink-0"
+          <a
+            href={whatsappUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 sm:gap-2 bg-[#25D366] text-white px-3.5 sm:px-5 py-2 rounded-full font-bold text-xs sm:text-sm shadow-md hover:bg-[#1EBE5D] transition-colors shrink-0 no-underline cursor-pointer"
           >
             <MessageCircle size={15} /> WhatsApp
-          </button>
+          </a>
         </div>
       </div>
 
@@ -216,6 +215,7 @@ export default function DigitalInvoice() {
             discountAmount={invoice.discount_amount || 0}
             manualDiscountAmount={invoice.manual_discount_amount || 0}
             gstAmount={invoice.total_gst || invoice.gst_amount || 0}
+            gstPercent={gstPercent}
             couponCode={invoice.coupon_code}
             total={invoice.total > 0 ? invoice.total : (subtotal + (invoice.delivery_charge || 0) + (invoice.total_gst || invoice.gst_amount || 0) - (invoice.discount_amount || 0) - (invoice.manual_discount_amount || 0))}
             status={invoice.status}

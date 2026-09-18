@@ -1,5 +1,5 @@
 import { BRAND_ADDRESS, BRAND_EMAIL, BRAND_EN, BRAND_LOGO, BRAND_OWNER, BRAND_PHONE_DISPLAY, BRAND_WHATSAPP } from './brand'
-import { formatCurrency, formatInvoiceNo, formatBillDateTime } from './retail'
+import { formatCurrency, formatInvoiceNo, formatBillDateTime, formatGstLabel } from './retail'
 
 export interface ThermalReceiptData {
   invoiceNo: string
@@ -18,6 +18,7 @@ export interface ThermalReceiptData {
   couponDiscount?: number
   manualDiscount?: number
   totalGst?: number
+  gstPercent?: number
   total: number
   storeName?: string
   storePhone?: string
@@ -45,6 +46,14 @@ export function printThermalReceipt(data: ThermalReceiptData) {
   }
 
   const dateStr = formatBillDateTime(data.date)
+  const gstLabel = formatGstLabel({
+    gstPercent: data.gstPercent,
+    gstAmount: data.totalGst,
+    subtotal: data.subtotal,
+    discountAmount: data.couponDiscount,
+    manualDiscountAmount: data.manualDiscount,
+    items: data.items as any,
+  })
 
   const html = `
     <!DOCTYPE html>
@@ -144,7 +153,7 @@ export function printThermalReceipt(data: ThermalReceiptData) {
             ` : ''}
             ${(data.totalGst || 0) > 0 ? `
               <tr>
-                <td class="text-left">SST</td>
+                <td class="text-left">${gstLabel}</td>
                 <td class="text-right">+${formatCurrency(data.totalGst || 0)}</td>
               </tr>
             ` : ''}

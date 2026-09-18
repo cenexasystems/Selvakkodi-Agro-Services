@@ -970,6 +970,8 @@ export default function Dashboard() {
       customerName: order.customer_name,
       phone: order.phone,
       invoiceNumber: order.invoice_no || order.id,
+      invoiceId: order.id,
+      orderId: order.id,
       invoiceDate: order.billing_date || order.created_at,
       items: items.map(item => ({
         name: item.name,
@@ -982,6 +984,8 @@ export default function Dashboard() {
       subtotal,
       couponDiscount: order.discount_amount,
       shipping: order.delivery_charge,
+      gstAmount: order.total_gst,
+      gstPercent: order.gst_percent ?? (order as any).gstPercent ?? (order as any).gst_rate,
       total: order.total,
     })
     return { items, subtotal, message, fileName: `Invoice-${order.invoice_no || order.id}.pdf` }
@@ -1051,6 +1055,7 @@ export default function Dashboard() {
       discountAmount: order.discount_amount,
       manualDiscountAmount: order.manual_discount_amount,
       gstAmount: order.total_gst,
+      gstPercent: order.gst_percent ?? (order as any).gstPercent ?? (order as any).gst_rate,
       paymentMode: order.payment_mode,
       total: order.total,
     })
@@ -2001,6 +2006,8 @@ export default function Dashboard() {
                           customerName: order.customer_name,
                           phone: order.phone,
                           invoiceNumber: formatInvoiceNo(order.invoice_no || order.id),
+                          invoiceId: order.id,
+                          orderId: order.id,
                           invoiceDate: order.billing_date || order.created_at,
                           items: normalizedItems.map(item => ({
                             name: item.name,
@@ -2011,6 +2018,8 @@ export default function Dashboard() {
                             lineTotal: item.line_total,
                           })),
                           subtotal: normalizedItems.reduce((sum, item) => sum + item.line_total, 0),
+                          gstAmount: order.total_gst,
+                          gstPercent: order.gst_percent ?? (order as any).gstPercent ?? (order as any).gst_rate,
                           total: getOrderTotal(order),
                           paymentMode: order.payment_mode || order.payment_method,
                         })
@@ -3698,6 +3707,7 @@ export default function Dashboard() {
                     discountAmount={invoicePreviewOrder.discount_amount}
                     manualDiscountAmount={invoicePreviewOrder.manual_discount_amount}
                     gstAmount={invoicePreviewOrder.total_gst}
+                    gstPercent={invoicePreviewOrder.gst_percent ?? (invoicePreviewOrder as any).gstPercent ?? (invoicePreviewOrder as any).gst_rate}
                     paymentMode={invoicePreviewOrder.payment_mode}
                     total={invoicePreviewOrder.total}
                     status={invoicePreviewOrder.status}

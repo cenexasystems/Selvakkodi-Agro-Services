@@ -5,6 +5,30 @@ import { getAuthenticatedUser, requireRole } from '../../_lib/auth.js';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+async function findOrder(idParam: string) {
+  const isUuid = UUID_REGEX.test(idParam);
+  if (isUuid) {
+    const rows = await sql`SELECT * FROM public.orders WHERE id = ${idParam}::uuid LIMIT 1`;
+    if (rows && rows.length > 0) return rows[0];
+  }
+
+  const cleanNum = idParam.replace(/^[#\s]*inv[-_\s]*/i, '').trim();
+  const digitsOnly = idParam.replace(/\D/g, '');
+
+  const rows = await sql`
+    SELECT * FROM public.orders 
+    WHERE invoice_no = ${idParam}
+       OR invoice_no = ${cleanNum}
+       OR (length(${digitsOnly}) > 0 AND invoice_no = ${digitsOnly})
+       OR invoice_no ILIKE ${cleanNum}
+       OR ('INV' || invoice_no) ILIKE ${idParam}
+       OR invoice_no ILIKE ${'%' + cleanNum + '%'}
+       OR invoice_no ILIKE ${'%' + idParam + '%'}
+    LIMIT 1
+  `;
+  return rows && rows.length > 0 ? rows[0] : null;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!ensureMethod(req, res, ['GET', 'PUT', 'DELETE'])) return;
 
@@ -20,24 +44,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ─────────────────────────────────────────────────────────────────────────────
   if (req.method === 'GET') {
     try {
-      let orders;
-      if (isUuid) {
-        orders = await sql`SELECT * FROM public.orders WHERE id = ${idParam}::uuid LIMIT 1`;
-      } else {
-        orders = await sql`
-          SELECT * FROM public.orders 
-          WHERE invoice_no = ${idParam}
-             OR invoice_no ILIKE ${'%' + idParam}
-             OR invoice_no ILIKE ${idParam + '%'}
-          LIMIT 1
-        `;
-      }
+      const order = await findOrder(idParam);
 
-      if (!orders || orders.length === 0) {
+      if (!order) {
         return errorResponse(res, 'Order not found.', 404);
       }
 
-      const order = orders[0];
       const authUser = await getAuthenticatedUser(req);
 
       // Authorization checks:
@@ -49,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         (authUser.mobile && order.phone && order.phone.replace(/\D/g, '') === authUser.mobile.replace(/\D/g, ''))
       );
       // 3. Public access: allowed for digital invoice lookup (when requested by invoice number or public link)
-      const isInvoiceLookup = !isUuid || req.query.public === 'true';
+      const isInvoiceLookup = req.query.public === 'true' || req.query.public === '1' || !isUuid || !authUser;
 
       if (!isStaffOrAdmin && !isCustomerOwner && !isInvoiceLookup) {
         return errorResponse(res, 'Unauthorized to view this order.', 403);
@@ -61,7 +73,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           id, order_id, product_id, variant_id, product_name, name,
           tamil_name, variant_name, quantity, unit, unit_type,
           base_price, unit_price, line_total, image_url, is_manual,
-          source, note, created_at
+          source, note, gst_rate, gst_amount, created_at
         FROM public.order_items
         WHERE order_id = ${order.id}
         ORDER BY id ASC
@@ -87,12 +99,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const b = parseBody(req);
 
-      let targetId = idParam;
-      if (!isUuid) {
-        const lookup = await sql`SELECT id FROM public.orders WHERE invoice_no = ${idParam} LIMIT 1`;
-        if (!lookup || lookup.length === 0) return errorResponse(res, 'Order not found.', 404);
-        targetId = lookup[0].id;
-      }
+      const existing = await findOrder(idParam);
+      if (!existing) return errorResponse(res, 'Order not found.', 404);
+      const targetId = existing.id;
 
       const remarks = b.remarks !== undefined ? String(b.remarks) : null;
       const referenceNumber = b.referenceNumber ?? b.reference_number;
@@ -145,12 +154,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!user) return;
 
     try {
-      let targetId = idParam;
-      if (!isUuid) {
-        const lookup = await sql`SELECT id FROM public.orders WHERE invoice_no = ${idParam} LIMIT 1`;
-        if (!lookup || lookup.length === 0) return errorResponse(res, 'Order not found.', 404);
-        targetId = lookup[0].id;
-      }
+      const existing = await findOrder(idParam);
+      if (!existing) return errorResponse(res, 'Order not found.', 404);
+      const targetId = existing.id;
 
       // Disassociate from any advance orders to avoid foreign key restriction
       await sql`

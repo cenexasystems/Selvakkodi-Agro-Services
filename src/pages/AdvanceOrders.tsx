@@ -223,11 +223,14 @@ export default function AdvanceOrders({ onOrderCompleted }: AdvanceOrdersProps =
 
   const whatsappInvoice = (order: AdvanceOrder) => {
     const invNum = order.invoice_number || order.deposit_id
+    const orderId = order.completed_order_id || order.id || invNum
     const message = buildProfessionalWhatsAppMessage({
       customerName: order.customer_name,
       phone: order.phone,
       invoiceNumber: invNum,
-      invoiceUrl: publicInvoiceUrl(invNum),
+      invoiceId: orderId,
+      orderId: orderId,
+      invoiceUrl: publicInvoiceUrl(orderId),
     })
     window.open(toWhatsAppUrl(order.phone, message), '_blank', 'noopener,noreferrer')
   }

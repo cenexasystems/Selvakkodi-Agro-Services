@@ -41,7 +41,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let targetId = idParam;
 
     if (!isUuid) {
-      const lookup = await sql`SELECT id FROM public.orders WHERE invoice_no = ${idParam} LIMIT 1`;
+      const cleanNum = idParam.replace(/^[#\s]*inv[-_\s]*/i, '').trim();
+      const digitsOnly = idParam.replace(/\D/g, '');
+      const lookup = await sql`
+        SELECT id FROM public.orders 
+        WHERE invoice_no = ${idParam}
+           OR invoice_no = ${cleanNum}
+           OR (length(${digitsOnly}) > 0 AND invoice_no = ${digitsOnly})
+           OR invoice_no ILIKE ${cleanNum}
+           OR ('INV' || invoice_no) ILIKE ${idParam}
+        LIMIT 1
+      `;
       if (!lookup || lookup.length === 0) return errorResponse(res, 'Order not found.', 404);
       targetId = lookup[0].id;
     }

@@ -517,3 +517,65 @@ export const formatBillDateTime = (dateInput?: string | Date | number | null): s
   }
 }
 
+export interface ResolveGstRateParams {
+  gstPercent?: number | string | null
+  gstAmount?: number | null
+  subtotal?: number | null
+  discountAmount?: number | null
+  manualDiscountAmount?: number | null
+  items?: Array<{
+    gstPercent?: number | string | null
+    gst_percent?: number | string | null
+    gst_rate?: number | string | null
+    [key: string]: unknown
+  }> | null
+}
+
+/**
+ * Resolves the dynamic GST rate percentage for an invoice.
+ * Checks explicit gstPercent first, then item GST rates, then computes (gstAmount / taxableSubtotal) * 100.
+ */
+export function resolveGstRate(params: ResolveGstRateParams): number {
+  if (params.gstPercent !== undefined && params.gstPercent !== null && params.gstPercent !== '') {
+    const p = Number(params.gstPercent)
+    if (!isNaN(p) && p > 0) return Math.round(p * 100) / 100
+  }
+
+  if (Array.isArray(params.items) && params.items.length > 0) {
+    const itemWithGst = params.items.find(i => {
+      const r = Number(i.gstPercent ?? i.gst_percent ?? i.gst_rate)
+      return !isNaN(r) && r > 0
+    })
+    if (itemWithGst) {
+      const r = Number(itemWithGst.gstPercent ?? itemWithGst.gst_percent ?? itemWithGst.gst_rate)
+      return Math.round(r * 100) / 100
+    }
+  }
+
+  const gst = Number(params.gstAmount || 0)
+  if (gst > 0) {
+    const subtotal = Math.max(0, Number(params.subtotal || 0))
+    const disc = Math.max(0, Number(params.discountAmount || 0)) + Math.max(0, Number(params.manualDiscountAmount || 0))
+    const taxable = Math.max(0, subtotal - disc) || subtotal
+    if (taxable > 0) {
+      const calculated = (gst / taxable) * 100
+      return Math.round(calculated * 100) / 100
+    }
+  }
+
+  return 0
+}
+
+/**
+ * Formats the GST label dynamically with percentage if rate > 0:
+ * e.g. "GST (5%)" or "GST (18%)" or "GST" if rate is 0.
+ */
+export function formatGstLabel(params: ResolveGstRateParams): string {
+  const rate = resolveGstRate(params)
+  if (rate > 0) {
+    const formattedRate = Number.isInteger(rate) ? rate.toString() : Number(rate.toFixed(2)).toString()
+    return `GST (${formattedRate}%)`
+  }
+  return 'GST'
+}
+

@@ -28,6 +28,7 @@ import {
   formatCurrency,
   formatQuantityDisplay,
   formatInvoiceNo,
+  resolveGstRate,
 } from '../lib/retail'
 import { PAYMENT_METHODS } from '../lib/paymentMethods'
 import { buildProfessionalWhatsAppMessage, buildAdvanceDepositWhatsAppMessage, publicInvoiceUrl } from '../lib/whatsappMessage'
@@ -64,6 +65,7 @@ type InvoiceSnap = {
   manualDiscountType: 'flat' | 'percent'
   manualDiscountValue: number
   gstAmount: number
+  gstPercent?: number
   total: number
   customerName: string
   phone: string
@@ -72,6 +74,8 @@ type InvoiceSnap = {
   balanceReturned: number
   paymentMode: string
   paymentMethod?: string
+  remarks?: string
+  referenceNumber?: string
   invoicePdfUrl?: string
 }
 
@@ -476,7 +480,7 @@ export default function Pos(props: PosProps = {}) {
     if (total <= 0) { setError('The order total must be greater than zero.'); return }
     const enteredAmount = Number(cashReceived) || 0
     const suggestedDeposit = enteredAmount > 0 && enteredAmount < total ? String(enteredAmount) : ''
-    setDepositForm({ amount: suggestedDeposit, expectedDeliveryDate: '', paymentMethod: (paymentType || 'CASH') as AdvancePaymentMethod, address: customer.address || '', remarks: '', referenceNumber: '' })
+    setDepositForm({ amount: suggestedDeposit, expectedDeliveryDate: '', paymentMethod: (paymentType || 'CASH') as AdvancePaymentMethod, address: customer.address || '', remarks: remarks.trim(), referenceNumber: referenceNumber.trim() })
     setError('')
     setDepositOpen(true)
   }
@@ -603,6 +607,9 @@ export default function Pos(props: PosProps = {}) {
         manualDiscountType,
         manualDiscountValue: manualDiscountNumeric,
         gstAmount: totalGst,
+        gstPercent: billGstEnabled && gstType === 'percent'
+          ? Math.max(0, Number(gstInput) || 0)
+          : (totalGst > 0 ? resolveGstRate({ items, gstAmount: totalGst, subtotal, discountAmount: couponDiscount, manualDiscountAmount }) : undefined),
         total,
         customerName: customer.name.trim() || 'Walk-in Customer',
         phone: normalizedPhone,
@@ -611,6 +618,8 @@ export default function Pos(props: PosProps = {}) {
         balanceReturned: balanceToReturn,
         paymentMode: ordermode === 'online' ? 'Online' : paymentType,
         paymentMethod: paymentMode,
+        remarks: remarks.trim(),
+        referenceNumber: referenceNumber.trim(),
       }
       setInvoice(createdInvoice)
       // Low stock check — record stock change and trigger transition alerts
@@ -665,11 +674,13 @@ export default function Pos(props: PosProps = {}) {
     ? Number(cashReceived) - total : null
 
   const sendPosWhatsApp = (inv: InvoiceSnap) => {
-    const invoiceUrl = publicInvoiceUrl(inv.invoiceNo)
+    const invoiceUrl = publicInvoiceUrl(inv.id || inv.invoiceNo)
     const message = buildProfessionalWhatsAppMessage({
       customerName: inv.customerName,
       phone: inv.phone,
       invoiceNumber: inv.invoiceNo,
+      invoiceId: inv.id,
+      orderId: inv.id,
       invoiceDate: inv.date,
       invoiceUrl,
       paymentMode: inv.paymentMode || 'POS',
@@ -686,6 +697,7 @@ export default function Pos(props: PosProps = {}) {
       manualDiscountAmount: inv.manualDiscountAmount,
       shipping: inv.shipping,
       gstAmount: inv.gstAmount,
+      gstPercent: inv.gstPercent,
       total: inv.total,
     })
     window.open(toWhatsAppUrl(inv.phone || customer.phone || '', message), '_blank', 'noopener,noreferrer')
@@ -705,6 +717,7 @@ export default function Pos(props: PosProps = {}) {
         discountAmount: inv.couponDiscount,
         manualDiscountAmount: inv.manualDiscountAmount,
         gstAmount: inv.gstAmount,
+        gstPercent: inv.gstPercent,
         couponCode: inv.couponCode,
         paymentMode: inv.paymentMode,
         total: inv.total,
@@ -731,6 +744,7 @@ export default function Pos(props: PosProps = {}) {
       couponDiscount: inv.couponDiscount,
       manualDiscount: inv.manualDiscountAmount,
       totalGst: inv.gstAmount,
+      gstPercent: inv.gstPercent,
       total: inv.total,
     })
   }
@@ -875,6 +889,7 @@ export default function Pos(props: PosProps = {}) {
             discountAmount={invoice.couponDiscount || 0}
             manualDiscountAmount={invoice.manualDiscountAmount || 0}
             gstAmount={invoice.gstAmount || 0}
+            gstPercent={invoice.gstPercent}
             couponCode={invoice.couponCode}
             paymentMode={invoice.paymentMode || invoice.paymentMethod || 'Cash'}
           />
@@ -1019,7 +1034,7 @@ export default function Pos(props: PosProps = {}) {
                   className="w-full h-12 px-4 bg-white border border-[#A5D6A7]/60 rounded-xl focus:outline-none focus:border-[#2E7D32] text-[16px] md:text-[13px] font-bold text-[#111111] placeholder:text-gray-400 placeholder:font-medium"
                 />
               </div>
-              <div className="w-full min-w-0 md:col-span-2">
+              <div className="w-full min-w-0">
                 <label className="block text-[13px] md:text-[10px] font-black text-[#374151] tracking-wider uppercase mb-1.5">Billing Date (Optional)</label>
                 <input
                   id="pos-billing-date"

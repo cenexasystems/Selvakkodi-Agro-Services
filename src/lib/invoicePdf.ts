@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf'
 import html2canvas from 'html2canvas'
 import { BRAND_ADDRESS, BRAND_EMAIL, BRAND_EN, BRAND_OWNER, BRAND_PHONE_DISPLAY } from './brand'
-import { formatCurrency, formatQuantityDisplay, normalizeStructuredOrderItem, formatInvoiceNo, formatBillDateTime } from './retail'
+import { formatCurrency, formatQuantityDisplay, normalizeStructuredOrderItem, formatInvoiceNo, formatBillDateTime, formatGstLabel } from './retail'
 import { LOGO_BASE64 } from './logoBase64'
 
 export type InvoicePdfData = {
@@ -17,6 +17,7 @@ export type InvoicePdfData = {
   discountAmount?: number
   manualDiscountAmount?: number
   gstAmount?: number
+  gstPercent?: number
   couponCode?: string | null
   paymentMode?: string
 }
@@ -143,7 +144,17 @@ export function createInvoicePdf(data: InvoicePdfData): Blob {
   const rows: Array<[string, string, string]> = [['Subtotal', money(data.subtotal), ink]]
   if ((data.discountAmount || 0) > 0) rows.push([`Coupon${data.couponCode ? ` (${data.couponCode})` : ''}`, `-${money(data.discountAmount || 0)}`, '#2E7D32'])
   if ((data.manualDiscountAmount || 0) > 0) rows.push(['Discount', `-${money(data.manualDiscountAmount || 0)}`, '#2E7D32'])
-  if ((data.gstAmount || 0) > 0) rows.push(['GST', money(data.gstAmount || 0), ink])
+  if ((data.gstAmount || 0) > 0) {
+    const gstLabel = formatGstLabel({
+      gstPercent: data.gstPercent,
+      gstAmount: data.gstAmount,
+      subtotal: data.subtotal,
+      discountAmount: data.discountAmount,
+      manualDiscountAmount: data.manualDiscountAmount,
+      items: data.items as any,
+    })
+    rows.push([gstLabel, money(data.gstAmount || 0), ink])
+  }
   rows.push(['Delivery', (data.shipping || 0) > 0 ? money(data.shipping) : 'FREE', ink])
   doc.setFontSize(9)
   rows.forEach(([label, value, color]) => { doc.setFont('helvetica', 'normal'); doc.setTextColor(color); doc.text(label, 143, y, { align: 'right' }); doc.text(value, right - 4, y, { align: 'right' }); y += 7 })

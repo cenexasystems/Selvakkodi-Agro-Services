@@ -1,6 +1,6 @@
 import React from 'react'
 import { BRAND_ADDRESS, BRAND_EMAIL, BRAND_EN, BRAND_LOGO, BRAND_OWNER, BRAND_PHONE_DISPLAY } from '../lib/brand'
-import { formatCurrency, formatQuantityDisplay, normalizeStructuredOrderItem, formatInvoiceNo, formatBillDateTime } from '../lib/retail'
+import { formatCurrency, formatQuantityDisplay, normalizeStructuredOrderItem, formatInvoiceNo, formatBillDateTime, formatGstLabel } from '../lib/retail'
 
 export interface InvoiceItem {
   id?: number | string
@@ -17,6 +17,9 @@ export interface InvoiceItem {
   line_total?: number
   price: number
   offerPrice?: number | null
+  gst_percent?: number | null
+  gstPercent?: number | null
+  gst_rate?: number | null
 }
 
 export interface InvoiceProps {
@@ -36,6 +39,7 @@ export interface InvoiceProps {
   couponCode?: string | null
   manualDiscountAmount?: number
   gstAmount?: number
+  gstPercent?: number
   paymentMode?: string
   onPrintReceipt?: () => void
 }
@@ -57,11 +61,20 @@ export const Invoice: React.FC<InvoiceProps> = ({
   couponCode,
   manualDiscountAmount = 0,
   gstAmount = 0,
+  gstPercent,
   paymentMode,
   onPrintReceipt,
 }) => {
   const formattedInvoiceNo = formatInvoiceNo(invoiceNo)
   const dateStr = formatBillDateTime(date)
+  const gstLabel = formatGstLabel({
+    gstPercent,
+    gstAmount,
+    subtotal,
+    discountAmount,
+    manualDiscountAmount,
+    items,
+  })
 
   const statusColor = status === 'completed' ? '#2E7D32' : status === 'cancelled' ? '#dc2626' : '#d97706'
   const effectiveDelivery = deliveryCharge || shipping
@@ -208,7 +221,7 @@ export const Invoice: React.FC<InvoiceProps> = ({
             )}
             {gstAmount > 0 && (
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                <span style={{ fontSize: 11, color: '#666' }}>GST</span>
+                <span style={{ fontSize: 11, color: '#666' }}>{gstLabel}</span>
                 <span style={{ fontSize: 11, fontWeight: 700 }}>+{formatCurrency(gstAmount)}</span>
               </div>
             )}

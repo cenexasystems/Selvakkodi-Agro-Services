@@ -1,4 +1,4 @@
-import { formatInvoiceNo, formatBillDateTime } from './retail'
+import { formatInvoiceNo, formatBillDateTime, formatGstLabel, isUuid } from './retail'
 
 export type WhatsAppLineItem = {
   name: string
@@ -13,6 +13,8 @@ export type BuildWhatsAppMessageInput = {
   customerName?: string
   phone?: string
   invoiceNumber: string
+  invoiceId?: string
+  orderId?: string
   invoiceDate?: string
   invoiceUrl?: string
   paymentMode?: string
@@ -22,6 +24,7 @@ export type BuildWhatsAppMessageInput = {
   manualDiscountAmount?: number
   shipping?: number
   gstAmount?: number
+  gstPercent?: number
   total?: number
 }
 
@@ -36,18 +39,20 @@ export type AdvanceDepositWhatsAppInput = {
   paymentMethod?: string
 }
 
-export const publicInvoiceUrl = (invoiceNumber: string) => {
-  const formatted = formatInvoiceNo(invoiceNumber)
+export const publicInvoiceUrl = (identifier: string) => {
+  const raw = String(identifier || '').trim()
+  const pathParam = isUuid(raw) ? raw : formatInvoiceNo(raw)
   const origin =
     typeof window !== 'undefined' && window.location?.origin && !window.location.origin.includes('localhost')
       ? window.location.origin
       : ''
-  return `${origin}/invoice/${encodeURIComponent(formatted)}`
+  return `${origin}/invoice/${encodeURIComponent(pathParam)}`
 }
 
 export const buildProfessionalWhatsAppMessage = (input: BuildWhatsAppMessageInput) => {
   const customerName = input.customerName?.trim() || 'Valued Customer'
-  const invoiceUrl = input.invoiceUrl || publicInvoiceUrl(input.invoiceNumber)
+  const lookupIdentifier = input.invoiceId || input.orderId || input.invoiceNumber
+  const invoiceUrl = input.invoiceUrl || publicInvoiceUrl(lookupIdentifier)
   const formattedNo = formatInvoiceNo(input.invoiceNumber)
 
   // Each item shows its ORIGINAL price (rate × qty), NOT the discounted line total
@@ -78,7 +83,15 @@ export const buildProfessionalWhatsAppMessage = (input: BuildWhatsAppMessageInpu
     totalsLines.push(`Shipping: ₹${shipping.toFixed(2)}`)
   }
   if (gst > 0) {
-    totalsLines.push(`GST: ₹${gst.toFixed(2)}`)
+    const gstLabel = formatGstLabel({
+      gstPercent: input.gstPercent,
+      gstAmount: gst,
+      subtotal,
+      discountAmount: couponDisc,
+      manualDiscountAmount: manualDisc,
+      items: input.items as any,
+    })
+    totalsLines.push(`${gstLabel}: ₹${gst.toFixed(2)}`)
   }
   if (input.total !== undefined) {
     totalsLines.push(`*Total Amount: ₹${total.toFixed(2)}*`)
