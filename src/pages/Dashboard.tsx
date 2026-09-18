@@ -83,6 +83,7 @@ type DashboardOrder = {
   created_at: string; total: number; status: string; order_mode: string; order_type: string; user_id: string | null; items: unknown
   coupon_code: string; discount_amount: number; manual_discount_amount: number; delivery_charge: number
   total_gst: number; payment_mode: string; payment_method?: string; invoice_pdf_url: string; remarks?: string; reference_number?: string; billing_date?: string
+  gst_percent?: number; gstPercent?: number; gst_rate?: number
 }
 type DashboardOrderItem = { order_id: string; product_name: string; category?: string; quantity: number; line_total: number; is_manual?: boolean | null }
 type DashboardCoupon = {
@@ -428,6 +429,7 @@ export default function Dashboard() {
     manual_discount_amount: toNumber(row.manual_discount_amount, 0),
     delivery_charge: toNumber(row.delivery_charge, 0),
     total_gst: toNumber(row.total_gst ?? row.gst_amount, 0),
+    gst_percent: row.gst_percent !== undefined ? toNumber(row.gst_percent) : (row.gstPercent !== undefined ? toNumber(row.gstPercent) : undefined),
     payment_mode: String(row.payment_mode || row.payment_method || ''),
     invoice_pdf_url: String(row.invoice_pdf_url || ''),
     remarks: row.remarks ? String(row.remarks) : undefined,

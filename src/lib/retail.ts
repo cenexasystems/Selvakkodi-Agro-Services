@@ -523,12 +523,8 @@ export interface ResolveGstRateParams {
   subtotal?: number | null
   discountAmount?: number | null
   manualDiscountAmount?: number | null
-  items?: Array<{
-    gstPercent?: number | string | null
-    gst_percent?: number | string | null
-    gst_rate?: number | string | null
-    [key: string]: unknown
-  }> | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  items?: Array<any> | null
 }
 
 /**
@@ -543,7 +539,7 @@ export function resolveGstRate(params: ResolveGstRateParams): number {
 
   if (Array.isArray(params.items) && params.items.length > 0) {
     const itemWithGst = params.items.find(i => {
-      const r = Number(i.gstPercent ?? i.gst_percent ?? i.gst_rate)
+      const r = Number(i?.gstPercent ?? i?.gst_percent ?? i?.gst_rate)
       return !isNaN(r) && r > 0
     })
     if (itemWithGst) {
