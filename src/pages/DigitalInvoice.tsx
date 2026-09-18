@@ -90,6 +90,21 @@ export default function DigitalInvoice() {
     .map((item: Record<string, unknown>) => normalizeStructuredOrderItem(item))
   const subtotal = invoiceItems.reduce((sum: number, item: ReturnType<typeof normalizeStructuredOrderItem>) => sum + item.line_total, 0)
 
+  // ── Neon DB returns NUMERIC columns as strings — coerce everything to Number
+  // so that .toFixed() and arithmetic never crash with "x.toFixed is not a function"
+  const invoiceTotal        = Number(invoice.total              ?? 0)
+  const invoiceShipping     = Number(invoice.delivery_charge    ?? invoice.shipping ?? 0)
+  const invoiceDiscount     = Number(invoice.discount_amount    ?? 0)
+  const invoiceManualDisc   = Number(invoice.manual_discount_amount ?? 0)
+  const invoiceTotalGst     = Number(invoice.total_gst          ?? invoice.gst_amount ?? 0)
+  const invoiceGstPercent   = invoice.gst_percent != null
+    ? Number(invoice.gst_percent)
+    : invoice.gstPercent != null
+      ? Number(invoice.gstPercent)
+      : invoice.gst_rate != null
+        ? Number(invoice.gst_rate)
+        : undefined
+
   const downloadPdf = async () => {
     if (!invoiceElementRef.current) return
     const file = await invoicePdfFileFromElement(invoiceElementRef.current, invoice.invoice_no)
@@ -101,7 +116,7 @@ export default function DigitalInvoice() {
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
-  const gstPercent = invoice.gst_percent ?? invoice.gstPercent ?? invoice.gst_rate
+  const gstPercent = invoiceGstPercent
 
   const whatsappUrl = (() => {
     if (!invoice) return ''
@@ -137,12 +152,12 @@ export default function DigitalInvoice() {
       invoiceDate: invoice.billing_date || invoice.created_at || new Date().toISOString(),
       items,
       subtotal,
-      couponDiscount: invoice.discount_amount,
-      manualDiscountAmount: invoice.manual_discount_amount,
-      shipping: invoice.delivery_charge,
-      gstAmount: invoice.total_gst || invoice.gst_amount || 0,
+      couponDiscount: invoiceDiscount,
+      manualDiscountAmount: invoiceManualDisc,
+      shipping: invoiceShipping,
+      gstAmount: invoiceTotalGst,
       gstPercent,
-      total: invoice.total,
+      total: invoiceTotal,
       paymentMode: invoice.payment_mode || invoice.payment_method,
       invoiceUrl: typeof window !== 'undefined' ? window.location.href : '',
     })
@@ -154,7 +169,7 @@ export default function DigitalInvoice() {
   })()
 
   const printReceipt = () => {
-    const subtotal = invoice.total - (invoice.delivery_charge || 0) + (invoice.discount_amount || 0)
+    const printSubtotal = invoiceTotal - invoiceShipping + invoiceDiscount + invoiceManualDisc - invoiceTotalGst
     printThermalReceipt({
       invoiceNo: invoice.invoice_no,
       date: invoice.billing_date || invoice.created_at,
@@ -162,17 +177,17 @@ export default function DigitalInvoice() {
       phone: invoice.phone,
       items: (invoice.items || []).map((item: Record<string, unknown>) => ({
         name: item.name || item.product_name,
-        qty: item.qty || item.quantity,
+        qty: Number(item.qty ?? item.quantity ?? 1),
         unit: item.unit,
-        price: item.price || item.base_price || 0,
-        line_total: item.line_total
+        price: Number(item.price ?? item.base_price ?? 0),
+        line_total: Number(item.line_total ?? 0)
       })),
-      subtotal,
-      shipping: invoice.delivery_charge || 0,
-      couponDiscount: invoice.discount_amount || 0,
-      totalGst: invoice.total_gst || invoice.gst_amount || 0,
+      subtotal: printSubtotal,
+      shipping: invoiceShipping,
+      couponDiscount: invoiceDiscount,
+      totalGst: invoiceTotalGst,
       gstPercent,
-      total: invoice.total > 0 ? invoice.total : (subtotal + (invoice.delivery_charge || 0) + (invoice.total_gst || invoice.gst_amount || 0) - (invoice.discount_amount || 0) - (invoice.manual_discount_amount || 0))
+      total: invoiceTotal > 0 ? invoiceTotal : (printSubtotal + invoiceShipping + invoiceTotalGst - invoiceDiscount - invoiceManualDisc)
     })
   }
 
@@ -211,13 +226,13 @@ export default function DigitalInvoice() {
             address={invoice.address}
             items={invoice.items || []}
             subtotal={subtotal}
-            shipping={invoice.delivery_charge || 0}
-            discountAmount={invoice.discount_amount || 0}
-            manualDiscountAmount={invoice.manual_discount_amount || 0}
-            gstAmount={invoice.total_gst || invoice.gst_amount || 0}
+            shipping={invoiceShipping}
+            discountAmount={invoiceDiscount}
+            manualDiscountAmount={invoiceManualDisc}
+            gstAmount={invoiceTotalGst}
             gstPercent={gstPercent}
             couponCode={invoice.coupon_code}
-            total={invoice.total > 0 ? invoice.total : (subtotal + (invoice.delivery_charge || 0) + (invoice.total_gst || invoice.gst_amount || 0) - (invoice.discount_amount || 0) - (invoice.manual_discount_amount || 0))}
+            total={invoiceTotal > 0 ? invoiceTotal : (subtotal + invoiceShipping + invoiceTotalGst - invoiceDiscount - invoiceManualDisc)}
             status={invoice.status}
             paymentMode={invoice.payment_mode || invoice.payment_method}
             onPrintReceipt={printReceipt}

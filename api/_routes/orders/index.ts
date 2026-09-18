@@ -303,10 +303,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const deliveryCharge = Math.max(0, Number(b.deliveryCharge || b.delivery_charge || shipping));
     const effectiveDelivery = Math.max(shipping, deliveryCharge);
 
-    let totalGst = 0;
-    if (gstEnabled) {
-      totalGst = Math.max(0, Number(b.totalGst ?? b.total_gst ?? b.gstAmount ?? b.gst_amount ?? 0));
-    }
+    // Accept totalGst from the client regardless of the manual gstEnabled toggle.
+    // When products carry per-product GST rates, gstEnabled is false (no bill-level toggle
+    // was turned on), but the frontend already combines product-level + manual GST into
+    // a single totalGst value. We must persist it either way.
+    const clientTotalGst = Math.max(0, Number(b.totalGst ?? b.total_gst ?? b.gstAmount ?? b.gst_amount ?? 0));
+    const totalGst = clientTotalGst;
 
     // 7. Verified Grand Total
     const verifiedTotal = Math.max(

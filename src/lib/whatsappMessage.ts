@@ -39,14 +39,16 @@ export type AdvanceDepositWhatsAppInput = {
   paymentMethod?: string
 }
 
+// Production base URL — always use the VITE_APP_URL env var when set.
+// This ensures WhatsApp links are always full https:// URLs, even when
+// triggered from a local dev session (127.0.0.1 isn't clickable in WhatsApp).
+const PRODUCTION_URL = (import.meta.env.VITE_APP_URL as string | undefined)?.replace(/\/$/, '')
+  || 'https://selvakkodi-agro-services.vercel.app'
+
 export const publicInvoiceUrl = (identifier: string) => {
   const raw = String(identifier || '').trim()
   const pathParam = isUuid(raw) ? raw : formatInvoiceNo(raw)
-  const origin =
-    typeof window !== 'undefined' && window.location?.origin && !window.location.origin.includes('localhost')
-      ? window.location.origin
-      : ''
-  return `${origin}/invoice/${encodeURIComponent(pathParam)}`
+  return `${PRODUCTION_URL}/invoice/${encodeURIComponent(pathParam)}`
 }
 
 export const buildProfessionalWhatsAppMessage = (input: BuildWhatsAppMessageInput) => {
